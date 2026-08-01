@@ -41,10 +41,12 @@ using types - `IntVar`, `BoolVar`, `LinearExpr`, `Constraint` - that already exi
 they can be done in any order or picked up in parallel. Suggested order below is by
 expected real-world usage frequency, most useful first.
 
-**Task 0 - prerequisite, blocks everything below.**
-Resolve `DESIGN.md` §7's first open question: confirm `Lean-zh/protobuf`
-(`lean-toolchain v4.32.0`) builds as a dependency of this package
-(`lean-toolchain v4.32.2`), and get the v1 constraint kinds (baseline above) landed end to
+**Task 0 - prerequisite, blocks everything below. Done.**
+`Cpsat.Proto`/`Cpsat.Solver` land the baseline constraint kinds end to end through
+`solve`, exercised by `Test/Main.lean` (`lake test`); see `DESIGN.md` §7 for how its open
+questions were resolved. The remaining tasks in this plan are unstarted. Originally:
+confirm `Lean-zh/protobuf` (`lean-toolchain v4.32.0`) builds as a dependency of this
+package (`lean-toolchain v4.32.2`), and get the v1 constraint kinds (baseline above) landed end to
 end through `solve`. Nothing in this plan can start before that path exists, since every
 task below only adds to `Cpsat.Proto`/`Cpsat.Model`, which don't exist yet until v1 is in.
 

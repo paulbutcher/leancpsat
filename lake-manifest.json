@@ -8,7 +8,7 @@
    "rev": "b6af3753a1e9f12269039e1322bf3020175d7577",
    "name": "protobuf",
    "manifestFile": "lake-manifest.json",
-   "inputRev": "master",
+   "inputRev": "b6af3753a1e9f12269039e1322bf3020175d7577",
    "inherited": false,
    "configFile": "lakefile.lean"},
   {"url": "https://github.com/Lean-zh/binary",

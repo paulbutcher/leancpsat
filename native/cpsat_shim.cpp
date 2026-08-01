@@ -16,7 +16,7 @@
 namespace {
 
 void cpsat_stop_token_finalize(void *data) {
-  SolveCpDestroyAtomicBool(data);
+  SolveCpDestroyEnv(data);
 }
 
 void cpsat_stop_token_foreach(void *, b_lean_obj_arg) {}
@@ -58,13 +58,13 @@ LEAN_EXPORT lean_obj_res cpsat_solve(b_lean_obj_arg model_bytes,
 }
 
 LEAN_EXPORT lean_obj_res cpsat_new_stop_token(lean_obj_arg /* w */) {
-  void *token = SolveCpNewAtomicBool();
+  void *token = SolveCpNewEnv();
   return lean_io_result_mk_ok(lean_alloc_external(cpsat_stop_token_class(), token));
 }
 
 LEAN_EXPORT lean_obj_res cpsat_stop_token_stop(b_lean_obj_arg token,
                                                lean_obj_arg /* w */) {
-  SolveCpStopSolve(lean_get_external_data(token));
+  SolveCpStopSearch(lean_get_external_data(token));
   return lean_io_result_mk_ok(lean_box(0));
 }
 

@@ -1,0 +1,190 @@
+-- Copyright (c) 2026 Paul Butcher. All rights reserved.
+-- Released under Apache 2.0 license as described in the file LICENSE.
+import Protobuf
+import Cpsat.Model
+import Cpsat.Basic
+
+/-!
+Wire format layer: message shapes declared by hand against
+[Lean-zh/protobuf](https://github.com/Lean-zh/protobuf)'s internal notation
+(no `protoc`, no `.proto` sources), plus conversions between the generated
+message types and `Cpsat.Model`'s builder types. Field numbers are cited
+against the vendored `or-tools/ortools/sat/cp_model.proto` and
+`or-tools/ortools/sat/sat_parameters.proto`.
+
+Only the subset of `ConstraintProto`'s `oneof constraint` needed for the v1
+constraint kinds (`docs/PLAN.md` baseline) is declared; the wire format
+tolerates a message that doesn't know about every oneof case, so widening this
+later (per `docs/PLAN.md`) never requires touching already-declared fields.
+-/
+
+open scoped Protobuf.Notation
+
+namespace Cpsat.Proto
+
+message LinearExpressionProto {
+  repeated int32 vars = 1 [packed = true];
+  repeated int64 coeffs = 2 [packed = true];
+  int64 offset = 3;
+}
+
+message BoolArgumentProto {
+  repeated int32 literals = 1 [packed = true];
+}
+
+message LinearConstraintProto {
+  repeated int32 vars = 1 [packed = true];
+  repeated int64 coeffs = 2 [packed = true];
+  repeated int64 domain = 3 [packed = true];
+}
+
+message AllDifferentConstraintProto {
+  repeated LinearExpressionProto exprs = 1;
+}
+
+oneof ConstraintKindProto {
+  BoolArgumentProto bool_or = 3;
+  BoolArgumentProto bool_and = 4;
+  BoolArgumentProto at_most_one = 26;
+  BoolArgumentProto exactly_one = 29;
+  LinearConstraintProto linear = 12;
+  AllDifferentConstraintProto all_diff = 13;
+}
+
+message ConstraintProto {
+  string name = 1;
+  repeated int32 enforcement_literal = 2 [packed = true];
+  ConstraintKindProto constraint = 0;
+}
+
+message IntegerVariableProto {
+  string name = 1;
+  repeated int64 domain = 2 [packed = true];
+}
+
+message CpObjectiveProto {
+  repeated int32 vars = 1 [packed = true];
+  repeated int64 coeffs = 4 [packed = true];
+  double offset = 2;
+  double scaling_factor = 3;
+}
+
+message CpModelProto {
+  string name = 1;
+  repeated IntegerVariableProto variables = 2;
+  repeated ConstraintProto constraints = 3;
+  CpObjectiveProto objective = 4;
+}
+
+enum CpSolverStatusProto {
+  UNKNOWN = 0;
+  MODEL_INVALID = 1;
+  FEASIBLE = 2;
+  INFEASIBLE = 3;
+  OPTIMAL = 4;
+}
+
+message CpSolverResponseProto {
+  CpSolverStatusProto status = 1;
+  repeated int64 solution = 2 [packed = true];
+  double objective_value = 3;
+  double best_objective_bound = 4;
+  double wall_time = 15;
+}
+
+message SatParametersProto {
+  optional double max_time_in_seconds = 36;
+  optional int32 random_seed = 31;
+  optional bool log_search_progress = 41;
+  optional int32 num_workers = 206;
+}
+
+private def varRef (v : IntVar) : Int32 := Int32.ofInt (Int.ofNat v.index)
+
+private def litRef (b : BoolVar) : Int32 := Int32.ofInt b.literal
+
+/-- Clamp to the `Int64` range instead of wrapping, so shifting a domain that
+touches `Int64.minValue`/`Int64.maxValue` (CP-SAT's "unbounded" sentinels)
+keeps them at the extreme rather than overflowing past them. -/
+private def clampToInt64 (x : Int) : Int64 :=
+  if x < Int64.minValue.toInt then Int64.minValue
+  else if x > Int64.maxValue.toInt then Int64.maxValue
+  else Int64.ofInt x
+
+/-- `LinearConstraintProto`'s domain has no offset field, unlike
+`LinearExpr`. Shift the domain by `-constant` so `sum(coeffs*vars) + constant
+∈ domain` becomes the equivalent `sum(coeffs*vars) ∈ domain - constant`. -/
+private def shiftDomain (d : Domain) (constant : Int64) : Domain :=
+  ⟨d.intervals.map fun (lo, hi) =>
+    (clampToInt64 (lo.toInt - constant.toInt), clampToInt64 (hi.toInt - constant.toInt))⟩
+
+private def domainToFlatArray (d : Domain) : Array Int64 :=
+  d.intervals.flatMap fun (lo, hi) => #[lo, hi]
+
+private def linearExprToProto (e : LinearExpr) : LinearExpressionProto :=
+  { vars := e.terms.map (varRef ·.1), coeffs := e.terms.map (·.2), offset := e.constant }
+
+private def constraintKindToProto : ConstraintKind → ConstraintKindProto
+  | .linear expr domain =>
+    .linear {
+      vars := expr.terms.map (varRef ·.1)
+      coeffs := expr.terms.map (·.2)
+      domain := domainToFlatArray (shiftDomain domain expr.constant)
+    }
+  | .allDifferent vars => .all_diff { exprs := vars.map fun v => linearExprToProto (.ofIntVar v) }
+  | .boolOr lits => .bool_or { literals := lits.map litRef }
+  | .boolAnd lits => .bool_and { literals := lits.map litRef }
+  | .atMostOne lits => .at_most_one { literals := lits.map litRef }
+  | .exactlyOne lits => .exactly_one { literals := lits.map litRef }
+
+private def constraintDataToProto (cd : ConstraintData) : ConstraintProto :=
+  {
+    name := cd.name
+    enforcement_literal := cd.enforcementLiterals.map litRef
+    constraint := some (constraintKindToProto cd.kind)
+  }
+
+private def objectiveToProto (expr : LinearExpr) (maximize : Bool) : CpObjectiveProto :=
+  let vars := expr.terms.map (varRef ·.1)
+  let coeffs := expr.terms.map (·.2)
+  if maximize then
+    { vars, coeffs := coeffs.map (-·), offset := -(Float.ofInt expr.constant.toInt),
+      scaling_factor := -1.0 }
+  else
+    { vars, coeffs, offset := Float.ofInt expr.constant.toInt, scaling_factor := 1.0 }
+
+def modelStateToProto (s : ModelState) : CpModelProto :=
+  {
+    name := s.name
+    variables :=
+      (s.varDomains.zip s.varNames).map fun (d, n) => { name := n, domain := domainToFlatArray d }
+    constraints := s.constraints.map constraintDataToProto
+    objective := s.objective.map fun (expr, maximize) => objectiveToProto expr maximize
+  }
+
+def parametersToProto (p : SolverParameters) : SatParametersProto :=
+  {
+    max_time_in_seconds := p.maxTimeInSeconds
+    random_seed := p.randomSeed.map fun n => Int32.ofInt (Int.ofNat n)
+    log_search_progress := if p.logSearchProgress then some true else none
+    num_workers := p.numWorkers.map fun n => Int32.ofInt (Int.ofNat n)
+  }
+
+def statusFromProto : CpSolverStatusProto → CpSolverStatus
+  | .UNKNOWN => .unknown
+  | .MODEL_INVALID => .modelInvalid
+  | .FEASIBLE => .feasible
+  | .INFEASIBLE => .infeasible
+  | .OPTIMAL => .optimal
+  | _ => .unknown
+
+def responseFromProto (r : CpSolverResponseProto) : CpSolverResponse :=
+  {
+    status := statusFromProto r.status
+    objectiveValue := r.objective_value
+    bestObjectiveBound := r.best_objective_bound
+    solution := r.solution
+    wallTime := r.wall_time
+  }
+
+end Cpsat.Proto

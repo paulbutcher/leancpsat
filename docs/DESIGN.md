@@ -269,65 +269,49 @@ state who frees `*cres`).
 
 ## 5. Lakefile design
 
-Requirements from the prompt: build on both Linux and macOS; the user drops the matching
-OR-Tools SDK under `or-tools/` themselves (already true here: `or-tools/or-tools_x86_64_
-Ubuntu-24.10_cpp_v9.12.4544/` and `or-tools/or-tools_arm64_macOS-15.3.1_cpp_v9.12.4544/`).
+Requirements from the prompt: build on both Linux and macOS. In practice the OR-Tools
+side of this repo is not a downloaded prebuilt SDK archive but a full source checkout
+vendored under `or-tools/` (see the top-level git history: `or-tools/` was merged in via
+`git subtree`-style squash-merge) with its own local CMake build tree at `or-tools/build`
+(built with `cmake -S . -B build -DBUILD_DEPS=ON ...`, recorded in `notes.txt`). That
+changes the concrete paths from the original sketch below, but not the shape:
+
+- Headers live at `or-tools/ortools/...` (the source tree itself), not `<sdk>/include`.
+- Built shared libraries live at `or-tools/build/lib`, not `<sdk>/lib`.
+- `SolveCpModelWithParameters`/`SolveCpNewEnv`/`SolveCpStopSearch`/`SolveCpInterruptible`
+  (`cp_solver_c.h`; the header's actual symbol names - an earlier draft of this doc and
+  the first cut of the shim assumed an `AtomicBool`-based API that doesn't exist) are
+  exported from `libortools_core.so`, not `libortools.so` itself, so both must be passed
+  to the linker even though only `libortools.so` is `#include`d from.
+- `libortools.so`'s `RUNPATH` (`$ORIGIN/../lib:$ORIGIN`) already resolves its own
+  transitive dependencies (abseil, protobuf, re2, ...) at runtime, so nothing beyond an
+  `-I`/`-L`/`-lortools -lortools_core`/rpath foursome is needed on our side.
 
 The lakefile also needs a `require` for the `protobuf` Lake dependency (§3), fetched from
 git and pinned to a commit SHA. This is a network dependency at first build (or a
 manually-vendored one, if the user prefers not to have `lake build` reach the network) -
-unlike the OR-Tools SDK itself, which is always local and never fetched by Lake.
+unlike the OR-Tools checkout itself, which is always local and never fetched by Lake.
 
-Because SDK directory names are version- and platform-specific, the lakefile should not
-hardcode either. Instead, at configure time:
+At configure time, the lakefile:
 
-1. List entries under `or-tools/`. Require exactly one directory that looks like an
-   OR-Tools SDK (contains `include/ortools/sat/cp_model.h`); error out with a clear
-   message ("no SDK found, download one for your platform and extract it under
-   or-tools/" / "found N candidates, expected exactly one") otherwise. This makes the
-   lakefile itself platform-agnostic - it doesn't need to know it's "Ubuntu" vs "macOS",
-   only that whichever single SDK is present matches the host.
-2. Derive `<sdk>/include` and `<sdk>/lib` from that directory.
-3. Compile `native/cpsat_shim.cpp` as a C++ shim, with:
-   - `-I <sdk>/include -I <lean include dir> -std=c++20` (OR-Tools 9.x requires C++20)
-   - link against `-L <sdk>/lib -lortools`
-   - an rpath so the built Lean binary/shared lib finds `libortools.{so,dylib}` at
-     runtime without requiring `LD_LIBRARY_PATH`/`DYLD_LIBRARY_PATH`: `-Wl,-rpath,<sdk>/lib`
-     works with both GNU ld (Linux) and macOS's linker.
+1. Confirms `or-tools/ortools/sat/cp_model.h` and `or-tools/build/lib/libortools.so`
+   both exist; errors out with a clear message otherwise (source checkout missing, or
+   present but not yet built).
+2. Compiles `native/cpsat_shim.cpp` as a C++ shim, with:
+   - `-I or-tools -I <lean include dir> -std=c++20` (OR-Tools 9.x requires C++20)
+   - built via Lake's `buildO`, **not** `buildLeanO`: the latter compiles with Lean's
+     bundled clang under `-nostdinc --sysroot <lean-toolchain>`, which has no C++
+     standard library headers since it exists for compiling Lean's own generated C
+     output, not hand-written C++ against libstdc++. `buildO` with `compiler := "c++"`
+     (the system compiler) is the right tool here.
+   - link against `-L or-tools/build/lib -lortools -lortools_core`
+   - an rpath so the built Lean binary finds the `.so`s at runtime without requiring
+     `LD_LIBRARY_PATH`: `-Wl,-rpath,or-tools/build/lib` works with both GNU ld/lld
+     (Linux) and macOS's linker.
 
-Sketch (exact Lake API calls - `extern_lib`, `moreLeancArgs`, whether directory listing
-needs `unsafe`/`IO` plumbing at config time - to be nailed down during implementation,
-but the shape is):
-
-```lean
-import Lake
-open Lake DSL System
-
-def orToolsSdkDir (pkgDir : FilePath) : IO FilePath := do
-  let base := pkgDir / "or-tools"
-  let candidates ← (← base.readDir).filterM fun e =>
-    (e.path / "include" / "ortools" / "sat" / "cp_model.h").pathExists
-  match candidates with
-  | #[e] => return e.path
-  | #[]  => throw <| IO.userError
-      s!"No OR-Tools SDK found under {base}. Download the release for this platform \
-         and extract it there before building."
-  | _    => throw <| IO.userError
-      s!"Multiple OR-Tools SDKs found under {base}; expected exactly one."
-
-package cpsat
-
-extern_lib cpsatShim pkg := do
-  let sdk ← orToolsSdkDir pkg.dir
-  let srcJob ← inputTextFile <| pkg.dir / "native" / "cpsat_shim.cpp"
-  buildO (pkg.buildDir / "native" / "cpsat_shim.o") srcJob
-    #["-I", (sdk / "include").toString, "-I", (← getLeanIncludeDir).toString,
-      "-std=c++20", "-fPIC"]
-  -- ... link into a static/shared lib, propagate -L/-l/-rpath to downstream targets
-```
-
-Consuming executables/tests get `moreLinkArgs := #["-L<sdk>/lib", "-lortools",
-"-Wl,-rpath,<sdk>/lib"]` computed the same way.
+The actual lakefile (`findOrToolsBuild`, the `package cpsat where weakLeancArgs :=
+... weakLinkArgs := ...` declaration, and the `extern_lib cpsatShim` block) is the source
+of truth; see there for the exact code.
 
 ## 6. Testing
 
@@ -340,21 +324,20 @@ Consuming executables/tests get `moreLinkArgs := #["-L<sdk>/lib", "-lortools",
 - CI would need to run on both an Ubuntu and a macOS runner with the matching SDK
   present, since there's no way to cross-test the binary linking otherwise.
 
-## 7. Open questions to resolve during implementation
+## 7. Open questions from earlier drafts, now resolved
 
-- Buffer ownership for `cres`/`cres_len` out of `SolveCpModelWithParameters` (who frees
-  it - confirm against OR-Tools source, not just the header).
-- Exact current Lake DSL incantations for a dynamically-located external library
-  (`extern_lib` vs `target` vs `input_dir`, and how directory-listing IO composes with
-  Lake's config-time monad) - the sketch above captures intent, not verified syntax.
-- Whether to vendor a fixed subset of `SatParameters`/`CpModelProto` field numbers as
-  Lean constants with a comment citing the OR-Tools version they were read from, so a
-  future OR-Tools upgrade that renumbers (unlikely - proto field numbers are effectively
-  permanent) is at least detectable.
-- **First implementation step**: confirm `Lean-zh/protobuf` (`lean-toolchain v4.32.0`)
-  actually builds as a dependency of this package (`lean-toolchain v4.32.2`) before
-  writing any code against it. If it doesn't, fall back to the hand-rolled wire-codec
-  design (varint/tag/length-delimited primitives written directly in `Cpsat.Proto`).
-- Pin `protobuf`'s `require` to a specific commit SHA (no tagged releases exist upstream)
-  and record which SHA was validated, since there's no version number to reason about
-  compatibility from.
+- Buffer ownership for `cres`/`cres_len` out of `SolveCpModelWithParameters`: confirmed
+  against `ortools/sat/c_api/cp_solver_c.cc` (not just the header) to be
+  `strings::memdup` (`malloc`-backed), so the shim's `std::free(cres)` after copying into
+  a Lean `ByteArray` is correct.
+- Exact Lake DSL incantations: `extern_lib` with `buildO`/`buildStaticLib`, per §5.
+- `Lean-zh/protobuf` (`lean-toolchain v4.32.0`) does build cleanly as a dependency of this
+  package (`lean-toolchain v4.32.2`); no fallback to a hand-rolled wire codec was needed.
+- `protobuf`'s `require` is pinned to commit `b6af3753a1e9f12269039e1322bf3020175d7577`
+  in `lakefile.lean`, validated against this project's toolchain.
+- Field numbers for the declared subset of `CpModelProto`/`ConstraintProto`/
+  `SatParameters` are cited in comments in `Cpsat/Proto.lean` against the vendored
+  `.proto` sources directly (`or-tools/ortools/sat/cp_model.proto`,
+  `.../sat_parameters.proto`), which this checkout has (being a full source tree, not
+  just the generated headers a prebuilt SDK would ship) - no separate constants table was
+  needed on top of that.
