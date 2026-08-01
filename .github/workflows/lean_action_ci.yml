@@ -8,7 +8,27 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # Generous headroom for a cache-miss run: `or-tools/build` isn't
+    # committed (or-tools/.gitignore excludes it), so building it from
+    # scratch with -DBUILD_DEPS=ON compiles abseil/protobuf/re2/CBC/SCIP/
+    # HiGHS/OR-Tools itself, which can take well over an hour.
+    timeout-minutes: 180
 
     steps:
       - uses: actions/checkout@v5
+
+      - name: Compute OR-Tools source hash
+        id: or-tools-hash
+        run: echo "hash=$(git rev-parse HEAD:or-tools)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache OR-Tools build
+        uses: actions/cache@v4
+        with:
+          path: or-tools/build
+          key: or-tools-build-${{ runner.os }}-${{ steps.or-tools-hash.outputs.hash }}
+
       - uses: leanprover/lean-action@v1
+        env:
+          # Bare `-j` (cmake's own heuristic) can overcommit memory on a
+          # shared CI runner; pin it down explicitly here.
+          LEANCPSAT_ORTOOLS_JOBS: 4
