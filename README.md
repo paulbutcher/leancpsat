@@ -74,26 +74,11 @@ Objectives: `minimize`/`maximize` over a `LinearExpr`.
 
 ## What's not yet covered
 
-Everything above maps directly onto a `CpModelBuilder` method with no new structural
-concept involved. The rest of CP-SAT's constraint kinds need one of two things this
-library doesn't have yet:
-
-- **A first-class `IntervalVar` handle type**: `interval`, `no_overlap`,
-  `no_overlap_2d`, `cumulative`.
-- **An incremental sub-builder pattern** (a handle with its own follow-up methods,
-  e.g. adding one arc/tuple/transition/event at a time): `circuit`, `table`,
-  `automaton`, `reservoir`, plus `no_overlap_2d`/`cumulative` again.
-
-`routes` has no `CpModelBuilder` method to mirror at all in the OR-Tools C++ API, so
-supporting it means designing a Lean API from its protobuf message shape directly,
-with no existing precedent to follow. `dummy_constraint` is internal presolve
-bookkeeping with no user-facing purpose and is permanently out of scope.
-
-`SolverParameters` also only exposes a handful of the ~200 fields in the real
-`SatParameters` proto (time limit, worker count, random seed, search-progress
-logging) - the ones covering the common cases. Declaring more is the same pattern as
-declaring more constraint kinds: a field in `Cpsat.Proto`, a field in the Lean-facing
-struct.
+- `interval`, `no_overlap`, `no_overlap_2d`, `cumulative`
+- `circuit`, `table`, `automaton`, `reservoir`
+- `routes`, `dummy_constraint`
+- Most of `SatParameters` (`SolverParameters` currently exposes only time limit,
+  worker count, random seed, and search-progress logging)
 
 ## License
 
