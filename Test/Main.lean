@@ -73,6 +73,25 @@ def testExactlyOne : IO Unit := do
   let trueCount := (lits.filter fun b => resp.solution.getD b.literal.toNat 0 == 1).size
   assertEq trueCount 1 "exactlyOne: expected exactly one true literal"
 
+/-- `addMaxEquality`/`addMinEquality` over three fixed values: known max and
+min. `addMinEquality` is implemented via negation of `addMaxEquality`
+(`Cpsat.Model.addMinEquality`), so this exercises that derivation too, not
+just `lin_max` itself. -/
+def testLinMax : IO Unit := do
+  let ((maxVar, minVar), resp) ← solve (m := do
+    let a ← newConstant 3
+    let b ← newConstant 7
+    let c ← newConstant 5
+    let maxVar ← newIntVar (.ofInterval 0 10)
+    let minVar ← newIntVar (.ofInterval 0 10)
+    let vals := #[LinearExpr.ofIntVar a, LinearExpr.ofIntVar b, LinearExpr.ofIntVar c]
+    let _ ← addMaxEquality (.ofIntVar maxVar) vals
+    let _ ← addMinEquality (.ofIntVar minVar) vals
+    pure (maxVar, minVar))
+  assertEq resp.status .optimal "linMax: expected optimal"
+  assertEq (resp.value maxVar) (7 : Int64) "linMax: expected max = 7"
+  assertEq (resp.value minVar) (3 : Int64) "linMax: expected min = 3"
+
 /-- Infeasible model: `x <= 1` and `x >= 5` over a domain that admits both. -/
 def testInfeasible : IO Unit := do
   let (_, resp) ← solve (m := do
@@ -88,5 +107,6 @@ def main : IO Unit := do
   testMaximize
   testAllDifferent
   testExactlyOne
+  testLinMax
   testInfeasible
   IO.println "All tests passed."

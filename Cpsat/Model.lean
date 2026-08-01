@@ -88,8 +88,9 @@ structure Constraint where
   index : Nat
 deriving Repr, DecidableEq, Inhabited
 
-/-- The constraint kinds supported in this release. Each maps to exactly one
-CP-SAT `ConstraintProto` oneof case; see `docs/PLAN.md` for the rest. -/
+/-- The constraint kinds currently supported. Each maps to exactly one CP-SAT
+`ConstraintProto` oneof case; CP-SAT has several more, each addable the same
+way (a case here, a message in `Cpsat.Proto`, an `addX` function). -/
 inductive ConstraintKind where
   | linear (expr : LinearExpr) (domain : Domain)
   | allDifferent (vars : Array IntVar)
@@ -97,6 +98,7 @@ inductive ConstraintKind where
   | boolAnd (lits : Array BoolVar)
   | atMostOne (lits : Array BoolVar)
   | exactlyOne (lits : Array BoolVar)
+  | linMax (target : LinearExpr) (exprs : Array LinearExpr)
 deriving Repr, Inhabited
 
 structure ConstraintData where
@@ -169,6 +171,15 @@ def addAtMostOne (lits : Array BoolVar) : CpModelM Constraint :=
 
 def addExactlyOne (lits : Array BoolVar) : CpModelM Constraint :=
   addConstraint (.exactlyOne lits)
+
+def addMaxEquality (target : LinearExpr) (exprs : Array LinearExpr) : CpModelM Constraint :=
+  addConstraint (.linMax target exprs)
+
+/-- CP-SAT has no `lin_min` constraint kind; the C++ builder itself derives
+`AddMinEquality` from `AddMaxEquality` by negating the target and every
+expression (`cp_model.cc`), and this mirrors that exactly. -/
+def addMinEquality (target : LinearExpr) (exprs : Array LinearExpr) : CpModelM Constraint :=
+  addMaxEquality (-target) (exprs.map (-·))
 
 /-- `a → b`, encoded as `¬a ∨ b`. -/
 def addImplication (a b : BoolVar) : CpModelM Constraint :=

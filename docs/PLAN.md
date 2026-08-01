@@ -50,7 +50,7 @@ package (`lean-toolchain v4.32.2`), and get the v1 constraint kinds (baseline ab
 end through `solve`. Nothing in this plan can start before that path exists, since every
 task below only adds to `Cpsat.Proto`/`Cpsat.Model`, which don't exist yet until v1 is in.
 
-**Task 1 - `lin_max` (max, and min via negation).**
+**Task 1 - `lin_max` (max, and min via negation). Done.**
 - Declare `LinearArgumentProto` (`target`, `exprs`) in `Cpsat.Proto`, field numbers from
   `cp_model.pb.h`.
 - `addMaxEquality (target : LinearExpr) (exprs : Array LinearExpr) : CpModelM Constraint`

@@ -12,10 +12,10 @@ message types and `Cpsat.Model`'s builder types. Field numbers are cited
 against the vendored `or-tools/ortools/sat/cp_model.proto` and
 `or-tools/ortools/sat/sat_parameters.proto`.
 
-Only the subset of `ConstraintProto`'s `oneof constraint` needed for the v1
-constraint kinds (`docs/PLAN.md` baseline) is declared; the wire format
-tolerates a message that doesn't know about every oneof case, so widening this
-later (per `docs/PLAN.md`) never requires touching already-declared fields.
+Only the subset of `ConstraintProto`'s `oneof constraint` needed by the
+constraint kinds currently supported is declared; the wire format tolerates a
+message that doesn't know about every oneof case, so declaring more of them
+later never requires touching already-declared fields.
 -/
 
 open scoped Protobuf.Notation
@@ -42,6 +42,13 @@ message AllDifferentConstraintProto {
   repeated LinearExpressionProto exprs = 1;
 }
 
+-- Shared by `lin_max`, `int_div`, `int_mod`, and `int_prod` in the real
+-- `ConstraintProto` oneof: a target expression plus a list of operands.
+message LinearArgumentProto {
+  LinearExpressionProto target = 1;
+  repeated LinearExpressionProto exprs = 2;
+}
+
 oneof ConstraintKindProto {
   BoolArgumentProto bool_or = 3;
   BoolArgumentProto bool_and = 4;
@@ -49,6 +56,7 @@ oneof ConstraintKindProto {
   BoolArgumentProto exactly_one = 29;
   LinearConstraintProto linear = 12;
   AllDifferentConstraintProto all_diff = 13;
+  LinearArgumentProto lin_max = 27;
 }
 
 message ConstraintProto {
@@ -136,6 +144,8 @@ private def constraintKindToProto : ConstraintKind → ConstraintKindProto
   | .boolAnd lits => .bool_and { literals := lits.map litRef }
   | .atMostOne lits => .at_most_one { literals := lits.map litRef }
   | .exactlyOne lits => .exactly_one { literals := lits.map litRef }
+  | .linMax target exprs =>
+    .lin_max { target := linearExprToProto target, exprs := exprs.map linearExprToProto }
 
 private def constraintDataToProto (cd : ConstraintData) : ConstraintProto :=
   {
