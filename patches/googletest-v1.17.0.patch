@@ -1,0 +1,143 @@
+diff --git a/googlemock/include/gmock/internal/gmock-port.h b/googlemock/include/gmock/internal/gmock-port.h
+index 42d36d2f..3bf0b818 100644
+--- a/googlemock/include/gmock/internal/gmock-port.h
++++ b/googlemock/include/gmock/internal/gmock-port.h
+@@ -86,11 +86,11 @@
+ 
+ // Macros for declaring flags.
+ #define GMOCK_DECLARE_bool_(name) \
+-  ABSL_DECLARE_FLAG(bool, GMOCK_FLAG_NAME_(name))
++  GTEST_API_ ABSL_DECLARE_FLAG(bool, GMOCK_FLAG_NAME_(name))
+ #define GMOCK_DECLARE_int32_(name) \
+-  ABSL_DECLARE_FLAG(int32_t, GMOCK_FLAG_NAME_(name))
++  GTEST_API_ ABSL_DECLARE_FLAG(int32_t, GMOCK_FLAG_NAME_(name))
+ #define GMOCK_DECLARE_string_(name) \
+-  ABSL_DECLARE_FLAG(std::string, GMOCK_FLAG_NAME_(name))
++  GTEST_API_ ABSL_DECLARE_FLAG(std::string, GMOCK_FLAG_NAME_(name))
+ 
+ #define GMOCK_FLAG_GET(name) ::absl::GetFlag(GMOCK_FLAG(name))
+ #define GMOCK_FLAG_SET(name, value) \
+diff --git a/googletest/CMakeLists.txt b/googletest/CMakeLists.txt
+index dce6a7c9..c214dd49 100644
+--- a/googletest/CMakeLists.txt
++++ b/googletest/CMakeLists.txt
+@@ -19,6 +19,8 @@ option(gtest_build_tests "Build all of gtest's own tests." OFF)
+ 
+ option(gtest_build_samples "Build gtest's sample programs." OFF)
+ 
++option(gtest_disable_warnings_as_errors "Disable promoting warnings as errors." OFF)
++
+ option(gtest_disable_pthreads "Disable uses of pthreads in gtest." OFF)
+ 
+ option(
+diff --git a/googletest/cmake/internal_utils.cmake b/googletest/cmake/internal_utils.cmake
+index 7ca256a7..1a2e5210 100644
+--- a/googletest/cmake/internal_utils.cmake
++++ b/googletest/cmake/internal_utils.cmake
+@@ -11,6 +11,7 @@
+ # - The functions/macros defined in this file may depend on Google
+ #   Test and Google Mock's option() definitions, and thus must be
+ #   called *after* the options have been defined.
++include(GNUInstallDirs)
+ 
+ # Tweaks CMake's default compiler/linker settings to suit Google Test's needs.
+ #
+@@ -73,7 +74,11 @@ macro(config_compiler_and_linker)
+   if (MSVC)
+     # Newlines inside flags variables break CMake's NMake generator.
+     # TODO(vladl@google.com): Add -RTCs and -RTCu to debug builds.
+-    set(cxx_base_flags "-GS -W4 -WX -wd4251 -wd4275 -nologo -J")
++    set(cxx_base_flags "-GS -W4")
++    if (NOT gtest_disable_warnings_as_errors)
++      set(cxx_base_flags "${cxx_base_flags} -WX")
++    endif()
++    set(cxx_base_flags "${cxx_base_flags} -wd4251 -wd4275 -nologo -J")
+     set(cxx_base_flags "${cxx_base_flags} -D_UNICODE -DUNICODE -DWIN32 -D_WIN32")
+     set(cxx_base_flags "${cxx_base_flags} -DSTRICT -DWIN32_LEAN_AND_MEAN")
+     set(cxx_exception_flags "-EHsc -D_HAS_EXCEPTIONS=1")
+@@ -170,11 +175,11 @@ function(cxx_library_with_type name type cxx_flags)
+   # Set the output directory for build artifacts.
+   set_target_properties(${name}
+     PROPERTIES
+-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+-    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib"
+-    ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib"
+-    PDB_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+-    COMPILE_PDB_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
++    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR}"
++    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_LIBDIR}"
++    ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_LIBDIR}"
++    PDB_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR}"
++    COMPILE_PDB_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_LIBDIR}")
+   # Make PDBs match library name.
+   get_target_property(pdb_debug_postfix ${name} DEBUG_POSTFIX)
+   set_target_properties(${name}
+@@ -185,11 +190,19 @@ function(cxx_library_with_type name type cxx_flags)
+     COMPILE_PDB_NAME_DEBUG "${name}${pdb_debug_postfix}")
+ 
+   if (BUILD_SHARED_LIBS OR type STREQUAL "SHARED")
+-    set_target_properties(${name}
+-      PROPERTIES
+-      COMPILE_DEFINITIONS "GTEST_CREATE_SHARED_LIBRARY=1")
++    target_compile_definitions(${name} PRIVATE
++      "GTEST_CREATE_SHARED_LIBRARY=1")
+     target_compile_definitions(${name} INTERFACE
+-      $<INSTALL_INTERFACE:GTEST_LINKED_AS_SHARED_LIBRARY=1>)
++      $<BUILD_INTERFACE:GTEST_LINKED_AS_SHARED_LIBRARY=1>
++      $<INSTALL_INTERFACE:GTEST_LINKED_AS_SHARED_LIBRARY=1>
++    )
++    if(APPLE)
++      set_target_properties(${name} PROPERTIES
++        INSTALL_RPATH "@loader_path")
++    elseif(UNIX)
++      set_target_properties(${name} PROPERTIES
++        INSTALL_RPATH "$ORIGIN")
++    endif()
+   endif()
+   if (DEFINED GTEST_HAS_PTHREAD)
+     target_link_libraries(${name} PUBLIC Threads::Threads)
+@@ -226,9 +239,8 @@ function(cxx_executable_with_flags name cxx_flags libs)
+       COMPILE_FLAGS "${cxx_flags}")
+   endif()
+   if (BUILD_SHARED_LIBS)
+-    set_target_properties(${name}
+-      PROPERTIES
+-      COMPILE_DEFINITIONS "GTEST_LINKED_AS_SHARED_LIBRARY=1")
++    target_compile_definitions(${name} PRIVATE
++      "GTEST_LINKED_AS_SHARED_LIBRARY=1")
+   endif()
+   # To support mixing linking in static and dynamic libraries, link each
+   # library in with an extra call to target_link_libraries.
+diff --git a/googletest/include/gtest/internal/gtest-port.h b/googletest/include/gtest/internal/gtest-port.h
+index 25b7d194..ad6cb760 100644
+--- a/googletest/include/gtest/internal/gtest-port.h
++++ b/googletest/include/gtest/internal/gtest-port.h
+@@ -835,10 +835,10 @@ typedef struct _RTL_CRITICAL_SECTION GTEST_CRITICAL_SECTION;
+ #ifndef GTEST_API_
+ 
+ #ifdef _MSC_VER
+-#if defined(GTEST_LINKED_AS_SHARED_LIBRARY) && GTEST_LINKED_AS_SHARED_LIBRARY
+-#define GTEST_API_ __declspec(dllimport)
+-#elif defined(GTEST_CREATE_SHARED_LIBRARY) && GTEST_CREATE_SHARED_LIBRARY
++#if defined(GTEST_CREATE_SHARED_LIBRARY) && GTEST_CREATE_SHARED_LIBRARY
+ #define GTEST_API_ __declspec(dllexport)
++#elif defined(GTEST_LINKED_AS_SHARED_LIBRARY) && GTEST_LINKED_AS_SHARED_LIBRARY
++#define GTEST_API_ __declspec(dllimport)
+ #endif
+ #elif GTEST_HAVE_ATTRIBUTE_(visibility)
+ #define GTEST_API_ __attribute__((visibility("default")))
+@@ -2255,11 +2255,11 @@ using TimeInMillis = int64_t;  // Represents time in milliseconds.
+ 
+ // Macros for declaring flags.
+ #define GTEST_DECLARE_bool_(name) \
+-  ABSL_DECLARE_FLAG(bool, GTEST_FLAG_NAME_(name))
++  GTEST_API_ ABSL_DECLARE_FLAG(bool, GTEST_FLAG_NAME_(name))
+ #define GTEST_DECLARE_int32_(name) \
+-  ABSL_DECLARE_FLAG(int32_t, GTEST_FLAG_NAME_(name))
++  GTEST_API_ ABSL_DECLARE_FLAG(int32_t, GTEST_FLAG_NAME_(name))
+ #define GTEST_DECLARE_string_(name) \
+-  ABSL_DECLARE_FLAG(std::string, GTEST_FLAG_NAME_(name))
++  GTEST_API_ ABSL_DECLARE_FLAG(std::string, GTEST_FLAG_NAME_(name))
+ 
+ #define GTEST_FLAG_SAVER_ ::absl::FlagSaver
+ 

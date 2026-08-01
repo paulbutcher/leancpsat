@@ -1,0 +1,77 @@
+# Copyright 2010-2025 Google LLC
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Description: java wrapping of the code in ../
+
+load("@rules_cc//cc:cc_binary.bzl", "cc_binary")
+load("//bazel:or_java_wrap_cc.bzl", "or_java_wrap_cc")
+
+package(default_visibility = ["//visibility:public"])
+
+cc_binary(
+    name = "gen_cp_model_proto_swig",
+    srcs = ["gen_cp_model_proto_swig.cc"],
+    deps = [
+        "//ortools/sat:cp_model_cc_proto",
+        "//ortools/util/java:wrappers",
+        "@abseil-cpp//absl/flags:parse",
+        "@abseil-cpp//absl/flags:usage",
+        "@abseil-cpp//absl/log:die_if_null",
+        "@abseil-cpp//absl/log:initialize",
+        "@abseil-cpp//absl/strings:str_format",
+    ],
+)
+
+genrule(
+    name = "run_gen_cp_model_proto_swig",
+    outs = ["cp_model_proto.swig"],
+    cmd = "$(location :gen_cp_model_proto_swig) > $@",
+    tools = [":gen_cp_model_proto_swig"],
+)
+
+or_java_wrap_cc(
+    name = "cp_model_proto",
+    srcs = ["cp_model_proto.swig"],
+    java_deps = ["@maven//:com_google_errorprone_error_prone_annotations"],
+    package = "com.google.ortools.sat",
+    swig_includes = ["//ortools/base:base_swig"],
+    visibility = ["//visibility:public"],
+    deps = [
+        "//ortools/port:proto_utils",
+        "//ortools/sat:cp_model_cc_proto",
+        "//ortools/util/java:jni_helper",
+    ],
+)
+
+or_java_wrap_cc(
+    name = "sat",
+    srcs = ["sat.swig"],
+    java_deps = [
+        ":cp_model_proto",
+        "//ortools/sat:sat_parameters_java_proto",
+        "//ortools/util/java:sorted_interval_list",
+        "@maven//:com_google_errorprone_error_prone_annotations",
+        "@protobuf//java/core",
+    ],
+    package = "com.google.ortools.sat",
+    swig_includes = [
+        ":cp_model_proto.swig",
+        "//ortools/base:base_swig",
+        "//ortools/util/java:proto.i",
+        "//ortools/util/java:sorted_interval_list.swig",
+        "//ortools/util/java:vector.swig",
+    ],
+    use_directors = True,
+    visibility = ["//visibility:public"],
+    deps = ["//ortools/sat:swig_helper"],
+)

@@ -1,0 +1,62 @@
+// Copyright 2010-2025 Google LLC
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+#ifndef ORTOOLS_GLOP_STATUS_H_
+#define ORTOOLS_GLOP_STATUS_H_
+
+#include <string>
+
+namespace operations_research {
+namespace glop {
+
+// Return type for the solver functions that return "Did that work?".
+// It should only be used for unrecoverable errors.
+class Status {
+ public:
+  // Possible kinds of errors.
+  enum ErrorCode {
+    // Not an error. Returned on success.
+    GLOP_OK = 0,
+
+    // The LU factorization of the current basis couldn't be computed.
+    ERROR_LU = 1,
+  };
+
+  // Creates a "successful" status.
+  Status();
+
+  // Creates a status with the specified error code and error message.
+  // If "code == 0", error_message is ignored and a Status object identical
+  // to Status::OK is constructed.
+  Status(ErrorCode error_code, std::string error_message);
+
+  // Improves readability but identical to 0-arg constructor.
+  static Status OK() { return Status(); }
+
+  // Accessors.
+  ErrorCode error_code() const { return error_code_; }
+  const std::string& error_message() const { return error_message_; }
+  bool ok() const { return error_code_ == GLOP_OK; }
+
+ private:
+  ErrorCode error_code_;
+  std::string error_message_;
+};
+
+// Returns the string representation of the ErrorCode enum.
+std::string GetErrorCodeString(Status::ErrorCode error_code);
+
+}  // namespace glop
+}  // namespace operations_research
+
+#endif  // ORTOOLS_GLOP_STATUS_H_

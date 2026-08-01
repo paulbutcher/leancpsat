@@ -1,0 +1,437 @@
+# Copyright 2010-2025 Google LLC
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+load("@pip_deps//:requirements.bzl", "requirement")
+load("@rules_cc//cc:cc_binary.bzl", "cc_binary")
+load("@rules_cc//cc:cc_test.bzl", "cc_test")
+load("@rules_python//python:py_test.bzl", "py_test")
+load("//ortools/copts:configure_copts.bzl", "ORTOOLS_DEFAULT_COPTS", "ORTOOLS_DEFAULT_LINKOPTS", "ORTOOLS_TEST_COPTS")
+load("//tools/testing:bintest.bzl", "bintest")
+
+package(default_visibility = ["//visibility:public"])
+
+cc_test(
+    name = "assignment_linear_sum_assignment_test",
+    srcs = ["assignment_linear_sum_assignment.cc"],
+    copts = ORTOOLS_TEST_COPTS,
+    linkopts = ORTOOLS_DEFAULT_LINKOPTS,
+    deps = [
+        "//ortools/base",
+        "//ortools/base:log_severity",
+        "//ortools/graph:assignment",
+        "@abseil-cpp//absl/log",
+        "@abseil-cpp//absl/log:globals",
+    ],
+)
+
+py_test(
+    name = "assignment_linear_sum_assignment_py3",
+    srcs = ["assignment_linear_sum_assignment.py"],
+    main = "assignment_linear_sum_assignment.py",
+    deps = [
+        "//ortools/graph/python:linear_sum_assignment",
+        requirement("numpy"),
+    ],
+)
+
+cc_test(
+    name = "assignment_min_flow_test",
+    srcs = ["assignment_min_flow.cc"],
+    copts = ORTOOLS_TEST_COPTS,
+    linkopts = ORTOOLS_DEFAULT_LINKOPTS,
+    deps = [
+        "//ortools/base",
+        "//ortools/base:log_severity",
+        "//ortools/graph:min_cost_flow",
+        "@abseil-cpp//absl/log",
+        "@abseil-cpp//absl/log:globals",
+    ],
+)
+
+py_test(
+    name = "assignment_min_flow_py3",
+    srcs = ["assignment_min_flow.py"],
+    main = "assignment_min_flow.py",
+    deps = ["//ortools/graph/python:min_cost_flow"],
+)
+
+cc_test(
+    name = "balance_min_flow_test",
+    srcs = ["balance_min_flow.cc"],
+    copts = ORTOOLS_TEST_COPTS,
+    linkopts = ORTOOLS_DEFAULT_LINKOPTS,
+    deps = [
+        "//ortools/base",
+        "//ortools/base:log_severity",
+        "//ortools/graph:min_cost_flow",
+        "@abseil-cpp//absl/log",
+        "@abseil-cpp//absl/log:globals",
+    ],
+)
+
+py_test(
+    name = "balance_min_flow_py3",
+    srcs = ["balance_min_flow.py"],
+    main = "balance_min_flow.py",
+    deps = ["//ortools/graph/python:min_cost_flow"],
+)
+
+cc_test(
+    name = "simple_max_flow_program_test",
+    srcs = ["simple_max_flow_program.cc"],
+    copts = ORTOOLS_TEST_COPTS,
+    linkopts = ORTOOLS_DEFAULT_LINKOPTS,
+    deps = [
+        "//ortools/base",
+        "//ortools/base:log_severity",
+        "//ortools/graph:max_flow",
+        "@abseil-cpp//absl/log",
+        "@abseil-cpp//absl/log:globals",
+    ],
+)
+
+py_test(
+    name = "simple_max_flow_program_py3",
+    srcs = ["simple_max_flow_program.py"],
+    main = "simple_max_flow_program.py",
+    deps = [
+        "//ortools/graph/python:max_flow",
+        requirement("numpy"),
+    ],
+)
+
+cc_test(
+    name = "simple_min_cost_flow_program_test",
+    srcs = ["simple_min_cost_flow_program.cc"],
+    copts = ORTOOLS_TEST_COPTS,
+    linkopts = ORTOOLS_DEFAULT_LINKOPTS,
+    deps = [
+        "//ortools/base",
+        "//ortools/base:log_severity",
+        "//ortools/graph:min_cost_flow",
+        "@abseil-cpp//absl/log",
+        "@abseil-cpp//absl/log:globals",
+    ],
+)
+
+py_test(
+    name = "simple_min_cost_flow_program_py3",
+    srcs = ["simple_min_cost_flow_program.py"],
+    main = "simple_min_cost_flow_program.py",
+    deps = [
+        "//ortools/graph/python:min_cost_flow",
+        requirement("numpy"),
+    ],
+)
+
+cc_binary(
+    name = "root_a_tree",
+    srcs = ["root_a_tree.cc"],
+    copts = ORTOOLS_DEFAULT_COPTS,
+    linkopts = ORTOOLS_DEFAULT_LINKOPTS,
+    deps = [
+        "//ortools/base",
+        "//ortools/graph:rooted_tree",
+        "//ortools/graph_base:graph",
+        "@abseil-cpp//absl/log:check",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:status_macros",
+        "@abseil-cpp//absl/strings",
+    ],
+)
+
+bintest(
+    name = "root_a_tree_test",
+    srcs = [":root_a_tree_test.bintest"],
+    named_data = {"root_a_tree": ":root_a_tree"},
+)
+
+cc_binary(
+    name = "rooted_tree_paths",
+    srcs = ["rooted_tree_paths.cc"],
+    copts = ORTOOLS_DEFAULT_COPTS,
+    linkopts = ORTOOLS_DEFAULT_LINKOPTS,
+    deps = [
+        "//ortools/base",
+        "//ortools/graph:rooted_tree",
+        "@abseil-cpp//absl/log:check",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:status_macros",
+        "@abseil-cpp//absl/strings",
+    ],
+)
+
+bintest(
+    name = "rooted_tree_paths_test",
+    srcs = [":rooted_tree_paths_test.bintest"],
+    named_data = {"rooted_tree_paths": ":rooted_tree_paths"},
+)
+
+cc_binary(
+    name = "dijkstra_directed",
+    srcs = ["dijkstra_directed.cc"],
+    copts = ORTOOLS_DEFAULT_COPTS,
+    linkopts = ORTOOLS_DEFAULT_LINKOPTS,
+    deps = [
+        "//ortools/base",
+        "//ortools/graph:bounded_dijkstra",
+        "@abseil-cpp//absl/strings",
+    ],
+)
+
+bintest(
+    name = "dijkstra_directed_test",
+    srcs = [":dijkstra_directed_test.bintest"],
+    named_data = {"dijkstra_directed": ":dijkstra_directed"},
+)
+
+cc_binary(
+    name = "dijkstra_undirected",
+    srcs = ["dijkstra_undirected.cc"],
+    copts = ORTOOLS_DEFAULT_COPTS,
+    linkopts = ORTOOLS_DEFAULT_LINKOPTS,
+    deps = [
+        "//ortools/base",
+        "//ortools/graph:bounded_dijkstra",
+        "@abseil-cpp//absl/strings",
+    ],
+)
+
+bintest(
+    name = "dijkstra_undirected_test",
+    srcs = [":dijkstra_undirected_test.bintest"],
+    named_data = {"dijkstra_undirected": ":dijkstra_undirected"},
+)
+
+cc_binary(
+    name = "dijkstra_one_to_all",
+    srcs = ["dijkstra_one_to_all.cc"],
+    copts = ORTOOLS_DEFAULT_COPTS,
+    linkopts = ORTOOLS_DEFAULT_LINKOPTS,
+    deps = [
+        "//ortools/base",
+        "//ortools/base:types",
+        "//ortools/graph:bounded_dijkstra",
+        "//ortools/graph_base:graph",
+        "@abseil-cpp//absl/strings",
+    ],
+)
+
+bintest(
+    name = "dijkstra_one_to_all_test",
+    srcs = [":dijkstra_one_to_all_test.bintest"],
+    named_data = {"dijkstra_one_to_all": ":dijkstra_one_to_all"},
+)
+
+cc_binary(
+    name = "dijkstra_sequential",
+    srcs = ["dijkstra_sequential.cc"],
+    copts = ORTOOLS_DEFAULT_COPTS,
+    linkopts = ORTOOLS_DEFAULT_LINKOPTS,
+    deps = [
+        "//ortools/base",
+        "//ortools/base:types",
+        "//ortools/graph:bounded_dijkstra",
+        "//ortools/graph_base:graph",
+        "@abseil-cpp//absl/log:check",
+        "@abseil-cpp//absl/strings",
+    ],
+)
+
+bintest(
+    name = "dijkstra_sequential_test",
+    srcs = [":dijkstra_sequential_test.bintest"],
+    named_data = {"dijkstra_sequential": ":dijkstra_sequential"},
+)
+
+cc_binary(
+    name = "dijkstra_all_pairs_shortest_paths",
+    srcs = ["dijkstra_all_pairs_shortest_paths.cc"],
+    copts = ORTOOLS_DEFAULT_COPTS,
+    linkopts = ORTOOLS_DEFAULT_LINKOPTS,
+    deps = [
+        "//ortools/base",
+        "//ortools/base:types",
+        "//ortools/graph:bounded_dijkstra",
+        "//ortools/graph_base:graph",
+        "@abseil-cpp//absl/algorithm:container",
+        "@abseil-cpp//absl/flags:flag",
+        "@abseil-cpp//absl/log:check",
+        "@abseil-cpp//absl/random",
+        "@abseil-cpp//absl/time",
+    ],
+)
+
+bintest(
+    name = "dijkstra_all_pairs_shortest_paths_test",
+    srcs = [":dijkstra_all_pairs_shortest_paths_test.bintest"],
+    named_data = {"dijkstra_all_pairs_shortest_paths": ":dijkstra_all_pairs_shortest_paths"},
+)
+
+cc_binary(
+    name = "dag_simple_shortest_path",
+    srcs = ["dag_simple_shortest_path.cc"],
+    copts = ORTOOLS_DEFAULT_COPTS,
+    linkopts = ORTOOLS_DEFAULT_LINKOPTS,
+    deps = [
+        "//ortools/base",
+        "//ortools/graph:dag_shortest_path",
+        "@abseil-cpp//absl/strings",
+    ],
+)
+
+bintest(
+    name = "dag_simple_shortest_path_test",
+    srcs = [":dag_simple_shortest_path_test.bintest"],
+    named_data = {"dag_simple_shortest_path": ":dag_simple_shortest_path"},
+)
+
+cc_binary(
+    name = "dag_shortest_path_one_to_all",
+    srcs = ["dag_shortest_path_one_to_all.cc"],
+    copts = ORTOOLS_DEFAULT_COPTS,
+    linkopts = ORTOOLS_DEFAULT_LINKOPTS,
+    deps = [
+        "//ortools/base",
+        "//ortools/graph:dag_shortest_path",
+        "//ortools/graph_base:graph",
+        "//ortools/graph_base:topologicalsorter",
+        "@abseil-cpp//absl/log:check",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:status_macros",
+        "@abseil-cpp//absl/strings",
+    ],
+)
+
+bintest(
+    name = "dag_shortest_path_one_to_all_test",
+    srcs = [":dag_shortest_path_one_to_all_test.bintest"],
+    named_data = {"dag_shortest_path_one_to_all": ":dag_shortest_path_one_to_all"},
+)
+
+cc_binary(
+    name = "dag_shortest_path_sequential",
+    srcs = ["dag_shortest_path_sequential.cc"],
+    copts = ORTOOLS_DEFAULT_COPTS,
+    linkopts = ORTOOLS_DEFAULT_LINKOPTS,
+    deps = [
+        "//ortools/base",
+        "//ortools/graph:dag_shortest_path",
+        "//ortools/graph_base:graph",
+        "@abseil-cpp//absl/strings",
+    ],
+)
+
+bintest(
+    name = "dag_shortest_path_sequential_test",
+    srcs = [":dag_shortest_path_sequential_test.bintest"],
+    named_data = {"dag_shortest_path_sequential": ":dag_shortest_path_sequential"},
+)
+
+cc_binary(
+    name = "dag_simple_multiple_shortest_paths",
+    srcs = ["dag_simple_multiple_shortest_paths.cc"],
+    copts = ORTOOLS_DEFAULT_COPTS,
+    linkopts = ORTOOLS_DEFAULT_LINKOPTS,
+    deps = [
+        "//ortools/base",
+        "//ortools/graph:dag_shortest_path",
+        "@abseil-cpp//absl/strings",
+    ],
+)
+
+bintest(
+    name = "dag_simple_multiple_shortest_paths_test",
+    srcs = [":dag_simple_multiple_shortest_paths_test.bintest"],
+    named_data = {"dag_simple_multiple_shortest_paths": ":dag_simple_multiple_shortest_paths"},
+)
+
+cc_binary(
+    name = "dag_multiple_shortest_paths_one_to_all",
+    srcs = ["dag_multiple_shortest_paths_one_to_all.cc"],
+    copts = ORTOOLS_DEFAULT_COPTS,
+    linkopts = ORTOOLS_DEFAULT_LINKOPTS,
+    deps = [
+        "//ortools/base",
+        "//ortools/graph:dag_shortest_path",
+        "//ortools/graph_base:graph",
+        "//ortools/graph_base:topologicalsorter",
+        "@abseil-cpp//absl/log:check",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:status_macros",
+        "@abseil-cpp//absl/strings",
+    ],
+)
+
+bintest(
+    name = "dag_multiple_shortest_paths_one_to_all_test",
+    srcs = [":dag_multiple_shortest_paths_one_to_all_test.bintest"],
+    named_data = {"dag_multiple_shortest_paths_one_to_all": ":dag_multiple_shortest_paths_one_to_all"},
+)
+
+cc_binary(
+    name = "dag_multiple_shortest_paths_sequential",
+    srcs = ["dag_multiple_shortest_paths_sequential.cc"],
+    copts = ORTOOLS_DEFAULT_COPTS,
+    linkopts = ORTOOLS_DEFAULT_LINKOPTS,
+    deps = [
+        "//ortools/base",
+        "//ortools/graph:dag_shortest_path",
+        "//ortools/graph_base:graph",
+        "@abseil-cpp//absl/strings",
+    ],
+)
+
+bintest(
+    name = "dag_multiple_shortest_paths_sequential_test",
+    srcs = [":dag_multiple_shortest_paths_sequential_test.bintest"],
+    named_data = {"dag_multiple_shortest_paths_sequential": ":dag_multiple_shortest_paths_sequential"},
+)
+
+cc_binary(
+    name = "dag_simple_constrained_shortest_path",
+    srcs = ["dag_simple_constrained_shortest_path.cc"],
+    copts = ORTOOLS_DEFAULT_COPTS,
+    linkopts = ORTOOLS_DEFAULT_LINKOPTS,
+    deps = [
+        "//ortools/base",
+        "//ortools/graph:dag_constrained_shortest_path",
+        "//ortools/graph:dag_shortest_path",
+        "@abseil-cpp//absl/strings",
+    ],
+)
+
+bintest(
+    name = "dag_simple_constrained_shortest_path_test",
+    srcs = [":dag_simple_constrained_shortest_path_test.bintest"],
+    named_data = {"dag_simple_constrained_shortest_path": ":dag_simple_constrained_shortest_path"},
+)
+
+cc_binary(
+    name = "dag_constrained_shortest_path_sequential",
+    srcs = ["dag_constrained_shortest_path_sequential.cc"],
+    copts = ORTOOLS_DEFAULT_COPTS,
+    linkopts = ORTOOLS_DEFAULT_LINKOPTS,
+    deps = [
+        "//ortools/base",
+        "//ortools/graph:dag_constrained_shortest_path",
+        "//ortools/graph_base:graph",
+        "@abseil-cpp//absl/strings",
+    ],
+)
+
+bintest(
+    name = "dag_constrained_shortest_path_sequential_test",
+    srcs = [":dag_constrained_shortest_path_sequential_test.bintest"],
+    named_data = {"dag_constrained_shortest_path_sequential": ":dag_constrained_shortest_path_sequential"},
+)

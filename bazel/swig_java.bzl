@@ -1,0 +1,227 @@
+# Copyright 2010-2025 Google LLC
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+"""Build definitions for SWIG Java."""
+
+load("@bazel_skylib//lib:paths.bzl", "paths")
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+load("@rules_cc//cc/common:cc_info.bzl", "CcInfo")
+load("@rules_java//java:java_library.bzl", "java_library")
+load("@rules_java//java/common:java_common.bzl", "java_common")
+
+def _create_swig_action(ctx, swig_includes, swig_src):
+    swig_out_cc = ctx.outputs.outfile
+    hdr_file = ctx.outputs.outhdr
+
+    # Direct cc dependencies compilation contexts.
+    deps_cc_contexts = [
+        target[CcInfo].compilation_context
+        for target in ctx.attr.deps
+        if CcInfo in target
+    ]
+
+    # Headers of direct cc dependencies.
+    cc_headers = [cc_ctx.headers for cc_ctx in deps_cc_contexts]
+
+    # Include dirs of direct cc dependencies.
+    cc_include_dirs = [cc_ctx.includes for cc_ctx in deps_cc_contexts]
+
+    # Includes dirs are:
+    # - Workspace root
+    # - bin_dir to the include path for generated files
+    # - Include dirs of transitive cc dependencies.
+    swig_includes_dirs = [".", ctx.bin_dir.path] + depset(transitive = cc_include_dirs).to_list()
+
+    java_files_dir = ctx.actions.declare_directory("java_files_%s" % ctx.label.name)
+
+    swig_args = ctx.actions.args()
+    swig_args.add("-c++")
+    swig_args.add("-java")
+    swig_args.add("-package", ctx.attr.package)
+    swig_args.add("-outdir", java_files_dir.path)
+    if ctx.attr.swig_opt:
+        swig_args.add(ctx.attr.swig_opt)
+    swig_args.add("-o", swig_out_cc)
+    if ctx.attr.module:
+        swig_args.add("-module", ctx.attr.module)
+    swig_args.add_all(swig_includes_dirs, format_each = "-I%s")
+    swig_args.add(swig_src.path)
+
+    # Add swig LIB files.
+    swig_lib_files = ctx.files._swig_lib
+    swig_lib_dir = paths.dirname(swig_lib_files[0].path)
+    swig_inputs = depset([swig_src] + swig_includes + swig_lib_files, transitive = cc_headers)
+    swig_outputs = [swig_out_cc, java_files_dir]
+    if ctx.attr.use_directors:
+        swig_outputs.append(hdr_file)
+    ctx.actions.run(
+        outputs = swig_outputs,
+        inputs = swig_inputs,
+        env = {"SWIG_LIB": swig_lib_dir},
+        executable = ctx.executable._swig,
+        arguments = [swig_args],
+        mnemonic = "SwigCompile",
+    )
+
+    # JAR creation
+    java_runtime = ctx.attr._jdk[java_common.JavaRuntimeInfo]
+    jar_args = ctx.actions.args()
+    jar_args.add("cf", ctx.outputs.srcjar)
+    jar_args.add(java_files_dir.path)
+    ctx.actions.run(
+        outputs = [ctx.outputs.srcjar],
+        inputs = [java_files_dir],
+        executable = java_runtime.java_home + "/bin/jar",
+        tools = java_runtime.files,
+        arguments = [jar_args],
+        mnemonic = "SwigJar",
+    )
+    return (swig_out_cc, ctx.outputs.srcjar, hdr_file)
+
+def _java_wrap_cc_impl(ctx):
+    if len(ctx.files.srcs) != 1:
+        fail("There must be exactly one *.swig file", attr = "srcs")
+
+    _create_swig_action(ctx, ctx.files.swig_includes, ctx.files.srcs[0])
+
+_java_wrap_cc = rule(
+    doc = """
+Wraps C++ in Java using Swig.
+
+It's expected that the `swig` binary exists in the host's path.
+""",
+    implementation = _java_wrap_cc_impl,
+    attrs = {
+        "srcs": attr.label_list(
+            allow_empty = False,
+            allow_files = [".swig", ".i"],
+            flags = ["DIRECT_COMPILE_TIME_INPUT", "ORDER_INDEPENDENT"],
+            doc = """
+A list of one <code>swig</code> source.
+            """,
+        ),
+        "deps": attr.label_list(
+            doc = "C++ dependencies.",
+            providers = [CcInfo],
+        ),
+        "java_deps": attr.label_list(
+            doc = "Java dependencies.",
+        ),
+        "package": attr.string(
+            doc = "Package for generated Java.",
+            mandatory = True,
+        ),
+        "module": attr.string(doc = "Optional Swig module name."),
+        "outfile": attr.output(
+            doc = "Generated C++ output file.",
+            mandatory = True,
+        ),
+        "outhdr": attr.output(
+            doc = "Generated C++ header output file.",
+        ),
+        "srcjar": attr.output(
+            doc = "Generated Java source jar.",
+            mandatory = True,
+        ),
+        "_jdk": attr.label(
+            default = Label("@bazel_tools//tools/jdk:current_java_runtime"),
+            providers = [java_common.JavaRuntimeInfo],
+        ),
+        "_swig": attr.label(
+            default = Label("@swig//:swig"),
+            executable = True,
+            cfg = "exec",
+        ),
+        "_swig_lib": attr.label(
+            default = Label("@swig//:lib_java"),
+        ),
+        "swig_includes": attr.label_list(
+            doc = "SWIG includes.",
+            allow_files = True,
+        ),
+        "swig_opt": attr.string(doc = "Optional Swig opt."),
+        "use_directors": attr.bool(doc = "use directors"),
+    },
+)
+
+def java_wrap_cc(
+        name,
+        srcs,
+        package,
+        deps = [],
+        java_deps = [],
+        swig_opt = "",
+        swig_includes = [],
+        use_directors = False,
+        module = None,
+        visibility = None,
+        **kwargs):
+    """Wraps C++ in Java using Swig.
+
+    It's expected that the `swig` binary exists in the host's path.
+
+    Args:
+        name: target name.
+        srcs: A list of one <code>swig</code> source.
+        package: package of generated Java files.
+        deps: C++ deps.
+        java_deps: Java deps.
+        module: optional name of Swig module.
+        swig_opt: optional defines passed to the swig command.
+        swig_includes: list of swig files included by the current swig file.
+        use_directors: Boolean flag.
+        visibility: global visibility of the rule.
+        **kwargs: extra generic arguments, usually passed to sub-rules.
+
+    Generated targets:
+        {name}: java_library
+        lib{name}_cc: cc_library
+    """
+
+    wrapper_name = "_" + name + "_wrapper"
+    cc_name = name + "_cc"
+    outfile = name + ".cc"
+    outhdr = name + ".h"
+    srcjar = name + ".srcjar"
+
+    _java_wrap_cc(
+        name = wrapper_name,
+        srcs = srcs,
+        package = package,
+        outfile = outfile,
+        outhdr = outhdr if use_directors else None,
+        srcjar = srcjar,
+        deps = deps,
+        swig_opt = swig_opt,
+        module = module,
+        swig_includes = swig_includes,
+        use_directors = use_directors,
+        visibility = ["//visibility:private"],
+        **kwargs
+    )
+    cc_library(
+        name = cc_name,
+        srcs = [outfile],
+        hdrs = [outhdr] if use_directors else [],
+        deps = deps + [Label("@bazel_tools//tools/jdk:jni")],
+        alwayslink = True,
+        visibility = visibility,
+        **kwargs
+    )
+    java_library(
+        name = name,
+        srcs = [srcjar],
+        deps = java_deps,
+        visibility = visibility,
+        **kwargs
+    )

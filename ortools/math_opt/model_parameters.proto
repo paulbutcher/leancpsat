@@ -1,0 +1,181 @@
+// Copyright 2010-2025 Google LLC
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// Solve parameters that are specific to the model.
+
+syntax = "proto3";
+
+package operations_research.math_opt;
+
+import "google/protobuf/duration.proto";
+import "ortools/math_opt/solution.proto";
+import "ortools/math_opt/sparse_containers.proto";
+
+option java_package = "com.google.ortools.mathopt";
+option java_multiple_files = true;
+option java_outer_classname = "ModelParametersProtobuf";
+
+// A suggested starting solution for the solver.
+//
+// MIP solvers generally only want primal information (`variable_values`), while
+// LP solvers want both primal and dual information (`dual_values`).
+//
+// Many MIP solvers can work with: (1) partial solutions that do not specify all
+// variables or (2) infeasible solutions. In these cases, solvers typically
+// solve a sub-MIP to complete/correct the hint.
+//
+// How the hint is used by the solver, if at all, is highly dependent on the
+// solver, the problem type, and the algorithm used. The most reliable way to
+// ensure your hint has an effect is to read the underlying solvers logs with
+// and without the hint.
+//
+// Simplex-based LP solvers typically prefer an initial basis to a solution hint
+// (they need to crossover to convert the hint to a basic feasible solution
+// otherwise).
+//
+// TODO(b/183616124): Add hint-priorities to variable_values.
+message SolutionHintProto {
+  // A possibly partial assignment of values to the primal variables of the
+  // problem. The solver-independent requirements for this sub-message are:
+  //  * variable_values.ids are elements of VariablesProto.ids.
+  //  * variable_values.values must all be finite.
+  SparseDoubleVectorProto variable_values = 1;
+
+  // A (potentially partial) assignment of values to the linear constraints of
+  // the problem.
+  //
+  //  Requirements:
+  //   * dual_values.ids are elements of LinearConstraintsProto.ids.
+  //   * dual_values.values must all be finite.
+  SparseDoubleVectorProto dual_values = 2;
+}
+
+// Parameters for an individual objective in a multi-objective model.
+message ObjectiveParametersProto {
+  // Optional objective degradation absolute tolerance. For a hierarchical
+  // multi-objective solver, each objective fⁱ is processed in priority order:
+  // the solver determines the optimal objective value Γⁱ, if it exists, subject
+  // to all constraints in the model and the additional constraints that
+  // fᵏ(x) = Γᵏ (within tolerances) for each k < i. If set, a solution is
+  // considered to be "within tolerances" for this objective fᵏ if
+  // |fᵏ(x) - Γᵏ| ≤ `objective_degradation_absolute_tolerance`.
+  //
+  // See also `objective_degradation_relative_tolerance`; if both parameters are
+  // set for a given objective, the solver need only satisfy one to be
+  // considered "within tolerances".
+  //
+  //  If set, must be nonnegative.
+  optional double objective_degradation_absolute_tolerance = 7;
+
+  // Optional objective degradation relative tolerance. For a hierarchical
+  // multi-objective solver, each objective fⁱ is processed in priority order:
+  // the solver determines the optimal objective value Γⁱ, if it exists, subject
+  // to all constraints in the model and the additional constraints that
+  // fᵏ(x) = Γᵏ (within tolerances) for each k < i. If set, a solution is
+  // considered to be "within tolerances" for this objective fᵏ if
+  // |fᵏ(x) - Γᵏ| ≤ `objective_degradation_relative_tolerance` * |Γᵏ|.
+  //
+  // See also `objective_degradation_absolute_tolerance`; if both parameters are
+  // set for a given objective, the solver need only satisfy one to be
+  // considered "within tolerances".
+  //
+  //  If set, must be nonnegative.
+  optional double objective_degradation_relative_tolerance = 8;
+
+  // Maximum time a solver should spend on optimizing this particular objective
+  // (or infinite if not set).
+  //
+  // Note that this does not supersede the global time limit in
+  // SolveParametersProto.time_limit; both will be enforced when set.
+  //
+  // This value is not a hard limit, solve time may slightly exceed this value.
+  google.protobuf.Duration time_limit = 9;
+}
+
+// TODO(b/183628247): follow naming convention in fields below.
+// Parameters to control a single solve that are specific to the input model
+// (see SolveParametersProto for model independent parameters).
+message ModelSolveParametersProto {
+  // Filter that is applied to all returned sparse containers keyed by variables
+  // in PrimalSolutionProto and PrimalRayProto
+  // (PrimalSolutionProto.variable_values, PrimalRayProto.variable_values).
+  //
+  // Requirements:
+  //  * filtered_ids are elements of VariablesProto.ids.
+  SparseVectorFilterProto variable_values_filter = 1;
+
+  // Filter that is applied to all returned sparse containers keyed by linear
+  // constraints in DualSolutionProto and DualRay
+  // (DualSolutionProto.dual_values, DualRay.dual_values).
+  //
+  // Requirements:
+  //  * filtered_ids are elements of LinearConstraints.ids.
+  SparseVectorFilterProto dual_values_filter = 2;
+
+  // Filter that is applied to all returned sparse containers keyed by quadratic
+  // constraints in DualSolutionProto and DualRay
+  // (DualSolutionProto.quadratic_dual_values, DualRay.quadratic_dual_values).
+  //
+  // Requirements:
+  //  * filtered_ids are keys of ModelProto.quadratic_constraints.
+  SparseVectorFilterProto quadratic_dual_values_filter = 10;
+
+  // Filter that is applied to all returned sparse containers keyed by variables
+  // in DualSolutionProto and DualRay (DualSolutionProto.reduced_costs,
+  // DualRay.reduced_costs).
+  //
+  // Requirements:
+  //  * filtered_ids are elements of VariablesProto.ids.
+  SparseVectorFilterProto reduced_costs_filter = 3;
+
+  // Optional initial basis for warm starting simplex LP solvers. If set, it is
+  // expected to be valid according to `ValidateBasis` in
+  // `validators/solution_validator.h` for the current `ModelSummary`.
+  BasisProto initial_basis = 4;
+
+  // Optional solution hints. If the underlying solver only accepts a single
+  // hint, the first hint is used.
+  repeated SolutionHintProto solution_hints = 5;
+
+  // Optional branching priorities. Variables with higher values will be
+  // branched on first. Variables for which priorities are not set get the
+  // solver's default priority (usually zero).
+  //
+  // Requirements:
+  //  * branching_priorities.values must be finite.
+  //  * branching_priorities.ids must be elements of VariablesProto.ids.
+  SparseInt32VectorProto branching_priorities = 6;
+
+  // Optional parameters for the primary objective in a multi-objective model.
+  ObjectiveParametersProto primary_objective_parameters = 7;
+
+  // Optional parameters for the auxiliary objectives in a multi-objective
+  // model.
+  //
+  // Requirements:
+  //  * Map keys must also be map keys of ModelProto.auxiliary_objectives.
+  map<int64, ObjectiveParametersProto> auxiliary_objective_parameters = 8;
+
+  // Optional lazy constraint annotations. Included linear constraints will be
+  // marked as "lazy" with supporting solvers, meaning that they will only be
+  // added to the working model as-needed as the solver runs.
+  //
+  // Note that this an algorithmic hint that does not affect the model's
+  // feasible region; solvers not supporting these annotations will simply
+  // ignore it.
+  //
+  // Requirements:
+  //  * Each entry must be an element of VariablesProto.ids.
+  //  * Entries must be in strictly increasing order (i.e., sorted, no repeats).
+  repeated int64 lazy_linear_constraint_ids = 9;
+}
