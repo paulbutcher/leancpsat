@@ -13,7 +13,8 @@ def runStreaming (cmd : String) (args : Array String) : IO Unit := do
 
 /-- Build OR-Tools from the vendored source checkout via CMake, essentially
 the two commands recorded in `notes.txt`. This only runs once: subsequent
-`findOrToolsBuild` calls see `libortools.so` already present and skip it.
+`findOrToolsBuild` calls see `libortools.{so,dylib}` already present and skip
+it.
 
 Builds in parallel via a bare `-j` (cmake's own heuristic, generally the
 number of hardware threads) since that's fast on most machines. On a
@@ -21,8 +22,8 @@ memory-constrained machine that heuristic can OOM (more parallel C++
 translation units than there's RAM for), so `LEANCPSAT_ORTOOLS_JOBS`
 overrides it with an explicit job count. -/
 def buildOrTools (orToolsDir buildDir : FilePath) : IO Unit := do
-  IO.println s!"{buildDir}/lib/libortools.so not found; building OR-Tools from source. \
-    This is a one-time step and can take a long time."
+  IO.println s!"{buildDir}/lib/{nameToSharedLib "ortools"} not found; building OR-Tools from \
+    source. This is a one-time step and can take a long time."
   runStreaming "cmake" #["-S", orToolsDir.toString, "-B", buildDir.toString,
     "-DBUILD_DEPS=ON", "-DBUILD_FLATZINC=OFF", "-DBUILD_TESTING=OFF",
     "-DBUILD_SAMPLES=OFF", "-DBUILD_EXAMPLES=OFF"]
@@ -44,7 +45,7 @@ def findOrToolsBuild (orToolsDir : FilePath) : IO FilePath := do
   unless (← header.pathExists) do
     throw <| IO.userError s!"{header} not found. Expected a full OR-Tools source checkout under {orToolsDir}."
   let buildDir := orToolsDir / "build"
-  let lib := buildDir / "lib" / "libortools.so"
+  let lib := buildDir / "lib" / nameToSharedLib "ortools"
   unless (← lib.pathExists) do
     buildOrTools orToolsDir buildDir
     unless (← lib.pathExists) do
@@ -63,7 +64,7 @@ package cpsat where
   -- build artifact hashes (see Lake's `buildO` docs).
   weakLeancArgs := #["-I", orToolsInclude.toString]
   -- `SolveCpModelWithParameters` et al. (`cp_solver_c.h`) are exported from
-  -- `libortools_core.so`, not `libortools.so` itself, so both must be linked.
+  -- the `ortools_core` library, not `ortools` itself, so both must be linked.
   weakLinkArgs := #[
     "-L", orToolsLib.toString, "-lortools", "-lortools_core", s!"-Wl,-rpath,{orToolsLib}"
   ]
