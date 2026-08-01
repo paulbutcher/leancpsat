@@ -125,6 +125,81 @@ def testDivision : IO Unit := do
   assertEq resp2.status .optimal "division: expected optimal (-10 / 3)"
   assertEq (resp2.value target2) (-3 : Int64) "division: expected -10 / 3 = -3 (rounds toward zero)"
 
+/-- `target == expr % modulus`. The negative-dividend case pins down that the
+target's sign follows `expr`, not `modulus`: `-1 = -7 % 3`, not `2`. -/
+def testModulo : IO Unit := do
+  let (target1, resp1) ← solve (m := do
+    let expr ← newConstant 17
+    let modulus ← newConstant 5
+    let target ← newIntVar (.ofInterval (-20) 20)
+    let _ ← addModuloEquality (.ofIntVar target) (.ofIntVar expr) (.ofIntVar modulus)
+    pure target)
+  assertEq resp1.status .optimal "modulo: expected optimal (17 % 5)"
+  assertEq (resp1.value target1) (2 : Int64) "modulo: expected 17 % 5 = 2"
+
+  let (target2, resp2) ← solve (m := do
+    let expr ← newConstant (-7)
+    let modulus ← newConstant 3
+    let target ← newIntVar (.ofInterval (-20) 20)
+    let _ ← addModuloEquality (.ofIntVar target) (.ofIntVar expr) (.ofIntVar modulus)
+    pure target)
+  assertEq resp2.status .optimal "modulo: expected optimal (-7 % 3)"
+  assertEq (resp2.value target2) (-1 : Int64) "modulo: expected -7 % 3 = -1 (sign follows the dividend)"
+
+/-- `target = a * b` for two small int vars. -/
+def testMultiplication : IO Unit := do
+  let (target, resp) ← solve (m := do
+    let a ← newConstant 3
+    let b ← newConstant 4
+    let target ← newIntVar (.ofInterval 0 100)
+    let _ ← addMultiplicationEquality (.ofIntVar target) #[LinearExpr.ofIntVar a, LinearExpr.ofIntVar b]
+    pure target)
+  assertEq resp.status .optimal "multiplication: expected optimal"
+  assertEq (resp.value target) (12 : Int64) "multiplication: expected 3 * 4 = 12"
+
+/-- A small permutation and its known inverse: `vars = [1, 2, 0]` maps
+`invVars = [2, 0, 1]`, i.e. `invVars[vars[i]] == i`. -/
+def testInverse : IO Unit := do
+  let (invVars, resp) ← solve (m := do
+    let vars ← #[1, 2, 0].mapM newConstant
+    let invVars ← #[(), (), ()].mapM fun _ => newIntVar (.ofInterval 0 2)
+    let _ ← addInverseConstraint vars invVars
+    pure invVars)
+  assertEq resp.status .optimal "inverse: expected optimal"
+  assertEq (invVars.map resp.value) #[2, 0, 1] "inverse: expected [2, 0, 1]"
+
+/-- `addBoolXor` over one true literal, one false literal, and one free
+literal forces the free literal to make the total count of true literals odd:
+with one already true, the free literal must be false. -/
+def testBoolXor : IO Unit := do
+  let (free, resp) ← solve (m := do
+    let t ← BoolVar.ofIntVar <$> newConstant 1
+    let f ← BoolVar.ofIntVar <$> newConstant 0
+    let free ← newBoolVar
+    let _ ← addBoolXor #[t, f, free]
+    pure free)
+  assertEq resp.status .optimal "boolXor: expected optimal"
+  assertEq (resp.solution.getD free.literal.toNat 0) (0 : Int64)
+    "boolXor: expected the free literal forced false to keep parity odd"
+
+/-- `target = |expr|`, including a negative input. -/
+def testAbsEquality : IO Unit := do
+  let (target1, resp1) ← solve (m := do
+    let expr ← newConstant (-7)
+    let target ← newIntVar (.ofInterval 0 20)
+    let _ ← addAbsEquality (.ofIntVar target) (.ofIntVar expr)
+    pure target)
+  assertEq resp1.status .optimal "absEquality: expected optimal (|-7|)"
+  assertEq (resp1.value target1) (7 : Int64) "absEquality: expected |-7| = 7"
+
+  let (target2, resp2) ← solve (m := do
+    let expr ← newConstant 5
+    let target ← newIntVar (.ofInterval 0 20)
+    let _ ← addAbsEquality (.ofIntVar target) (.ofIntVar expr)
+    pure target)
+  assertEq resp2.status .optimal "absEquality: expected optimal (|5|)"
+  assertEq (resp2.value target2) (5 : Int64) "absEquality: expected |5| = 5"
+
 /-- Infeasible model: `x <= 1` and `x >= 5` over a domain that admits both. -/
 def testInfeasible : IO Unit := do
   let (_, resp) ← solve (m := do
@@ -143,5 +218,10 @@ def main : IO Unit := do
   testLinMax
   testElement
   testDivision
+  testModulo
+  testMultiplication
+  testInverse
+  testBoolXor
+  testAbsEquality
   testInfeasible
   IO.println "All tests passed."

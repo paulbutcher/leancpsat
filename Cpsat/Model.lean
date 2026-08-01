@@ -101,6 +101,10 @@ inductive ConstraintKind where
   | linMax (target : LinearExpr) (exprs : Array LinearExpr)
   | element (index : LinearExpr) (exprs : Array LinearExpr) (target : LinearExpr)
   | intDiv (target numerator denominator : LinearExpr)
+  | intMod (target expr modulus : LinearExpr)
+  | intProd (target : LinearExpr) (factors : Array LinearExpr)
+  | inverse (vars invVars : Array IntVar)
+  | boolXor (lits : Array BoolVar)
 deriving Repr, Inhabited
 
 structure ConstraintData where
@@ -195,6 +199,31 @@ def addElement (index : LinearExpr) (exprs : Array LinearExpr) (target : LinearE
 be zero. -/
 def addDivisionEquality (target numerator denominator : LinearExpr) : CpModelM Constraint :=
   addConstraint (.intDiv target numerator denominator)
+
+/-- `target == expr % modulus`. `modulus`'s domain must be strictly positive.
+The sign of `target` matches the sign of `expr` (so `-1 = -7 % 3`, not `2`). -/
+def addModuloEquality (target expr modulus : LinearExpr) : CpModelM Constraint :=
+  addConstraint (.intMod target expr modulus)
+
+/-- `target` equals the product of every element of `factors`. -/
+def addMultiplicationEquality (target : LinearExpr) (factors : Array LinearExpr) :
+    CpModelM Constraint :=
+  addConstraint (.intProd target factors)
+
+/-- `vars`/`invVars` are inverse permutations of each other:
+`invVars[vars[i]] == i` for every `i`. -/
+def addInverseConstraint (vars invVars : Array IntVar) : CpModelM Constraint :=
+  addConstraint (.inverse vars invVars)
+
+/-- Forces an odd number of `lits` to be true. -/
+def addBoolXor (lits : Array BoolVar) : CpModelM Constraint :=
+  addConstraint (.boolXor lits)
+
+/-- `target == |expr|`. CP-SAT has no `abs_equality` oneof case; the C++
+builder itself lowers this to `lin_max(target, {expr, -expr})`
+(`cp_model.cc`), and this mirrors that exactly, same as `addMinEquality`. -/
+def addAbsEquality (target expr : LinearExpr) : CpModelM Constraint :=
+  addMaxEquality target #[expr, -expr]
 
 /-- `a → b`, encoded as `¬a ∨ b`. -/
 def addImplication (a b : BoolVar) : CpModelM Constraint :=

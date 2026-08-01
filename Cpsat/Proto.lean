@@ -58,15 +58,29 @@ message ElementConstraintProto {
   repeated LinearExpressionProto exprs = 6;
 }
 
+-- Unlike `ElementConstraintProto`, the real C++ builder's only
+-- `AddInverseConstraint` overload writes the legacy plain-int32
+-- `f_direct`/`f_inverse` fields, not the newer `f_expr_direct`/
+-- `f_expr_inverse` (`LinearExpressionProto`) ones - so those are what's
+-- declared here.
+message InverseConstraintProto {
+  repeated int32 f_direct = 1 [packed = true];
+  repeated int32 f_inverse = 2 [packed = true];
+}
+
 oneof ConstraintKindProto {
   BoolArgumentProto bool_or = 3;
   BoolArgumentProto bool_and = 4;
+  BoolArgumentProto bool_xor = 5;
   BoolArgumentProto at_most_one = 26;
   BoolArgumentProto exactly_one = 29;
   LinearConstraintProto linear = 12;
   AllDifferentConstraintProto all_diff = 13;
   ElementConstraintProto element = 14;
+  InverseConstraintProto inverse = 18;
   LinearArgumentProto int_div = 7;
+  LinearArgumentProto int_mod = 8;
+  LinearArgumentProto int_prod = 11;
   LinearArgumentProto lin_max = 27;
 }
 
@@ -168,6 +182,15 @@ private def constraintKindToProto : ConstraintKind → ConstraintKindProto
       target := some (linearExprToProto target)
       exprs := #[linearExprToProto numerator, linearExprToProto denominator]
     }
+  | .intMod target expr modulus =>
+    .int_mod {
+      target := some (linearExprToProto target)
+      exprs := #[linearExprToProto expr, linearExprToProto modulus]
+    }
+  | .intProd target factors =>
+    .int_prod { target := some (linearExprToProto target), exprs := factors.map linearExprToProto }
+  | .inverse vars invVars => .inverse { f_direct := vars.map varRef, f_inverse := invVars.map varRef }
+  | .boolXor lits => .bool_xor { literals := lits.map litRef }
 
 private def constraintDataToProto (cd : ConstraintData) : ConstraintProto :=
   {

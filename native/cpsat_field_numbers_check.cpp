@@ -35,14 +35,21 @@ static_assert(ElementConstraintProto::kExprsFieldNumber == 6);
 static_assert(LinearArgumentProto::kTargetFieldNumber == 1);
 static_assert(LinearArgumentProto::kExprsFieldNumber == 2);
 
+static_assert(InverseConstraintProto::kFDirectFieldNumber == 1);
+static_assert(InverseConstraintProto::kFInverseFieldNumber == 2);
+
 static_assert(ConstraintProto::kNameFieldNumber == 1);
 static_assert(ConstraintProto::kEnforcementLiteralFieldNumber == 2);
 static_assert(ConstraintProto::kBoolOrFieldNumber == 3);
 static_assert(ConstraintProto::kBoolAndFieldNumber == 4);
+static_assert(ConstraintProto::kBoolXorFieldNumber == 5);
 static_assert(ConstraintProto::kIntDivFieldNumber == 7);
+static_assert(ConstraintProto::kIntModFieldNumber == 8);
+static_assert(ConstraintProto::kIntProdFieldNumber == 11);
 static_assert(ConstraintProto::kLinearFieldNumber == 12);
 static_assert(ConstraintProto::kAllDiffFieldNumber == 13);
 static_assert(ConstraintProto::kElementFieldNumber == 14);
+static_assert(ConstraintProto::kInverseFieldNumber == 18);
 static_assert(ConstraintProto::kAtMostOneFieldNumber == 26);
 static_assert(ConstraintProto::kLinMaxFieldNumber == 27);
 static_assert(ConstraintProto::kExactlyOneFieldNumber == 29);

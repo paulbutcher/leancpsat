@@ -75,29 +75,29 @@ task below only adds to `Cpsat.Proto`/`Cpsat.Model`, which don't exist yet until
   numerator (verifies CP-SAT's rounding convention is what we expect - confirm against
   documentation/solver behavior, not assumption).
 
-**Task 4 - `int_mod`.**
+**Task 4 - `int_mod`. Done.**
 - Reuses `LinearArgumentProto`.
 - `addModuloEquality (target expr modulus : LinearExpr) : CpModelM Constraint`
 - Test: modulo with a known remainder.
 
-**Task 5 - `int_prod`.**
+**Task 5 - `int_prod`. Done.**
 - Reuses `LinearArgumentProto`.
 - `addMultiplicationEquality (target : LinearExpr) (factors : Array LinearExpr) : CpModelM Constraint`
   (covers the general "array of factors" case; the two-factor overload is a thin wrapper).
 - Test: `target = a * b` for two small int vars.
 
-**Task 6 - `inverse`.**
+**Task 6 - `inverse`. Done.**
 - Declare `InverseConstraintProto` in `Cpsat.Proto`.
 - `addInverseConstraint (vars invVars : Array IntVar) : CpModelM Constraint`
 - Test: a small permutation and its known inverse.
 
-**Task 7 - `bool_xor`.**
+**Task 7 - `bool_xor`. Done.**
 - No new message declaration (reuses `BoolArgumentProto`); purely a new field number plus
   a new builder function.
 - `addBoolXor (lits : Array BoolVar) : CpModelM Constraint`
 - Test: odd/even parity over a few bool vars.
 
-**Task 8 - `abs_equality` (verify placement first).**
+**Task 8 - `abs_equality` (verify placement first). Done.**
 `AddAbsEquality` is a single-call, `Constraint`-returning method like the rest of this
 plan, but which oneof case backs it isn't confirmed from the header alone (it may lower
 to `lin_max` client-side, e.g. `abs(x) = max(x, -x)`, or something else). First step is
