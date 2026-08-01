@@ -22,7 +22,7 @@ jobs:
         run: echo "hash=$(git rev-parse HEAD:or-tools)" >> "$GITHUB_OUTPUT"
 
       - name: Cache OR-Tools build
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: or-tools/build
           key: or-tools-build-${{ runner.os }}-${{ steps.or-tools-hash.outputs.hash }}
