@@ -3,12 +3,41 @@
 import Lake
 open Lake DSL System
 
+/-- Run a command with inherited stdio (so its output streams live), throwing
+if it exits non-zero. -/
+def runStreaming (cmd : String) (args : Array String) : IO Unit := do
+  let child ← IO.Process.spawn { cmd, args }
+  let exitCode ← child.wait
+  unless exitCode == 0 do
+    throw <| IO.userError s!"`{cmd} {" ".intercalate args.toList}` exited with code {exitCode}"
+
+/-- Build OR-Tools from the vendored source checkout via CMake, essentially
+the two commands recorded in `notes.txt`. This only runs once: subsequent
+`findOrToolsBuild` calls see `libortools.so` already present and skip it.
+
+Builds in parallel via a bare `-j` (cmake's own heuristic, generally the
+number of hardware threads) since that's fast on most machines. On a
+memory-constrained machine that heuristic can OOM (more parallel C++
+translation units than there's RAM for), so `LEANCPSAT_ORTOOLS_JOBS`
+overrides it with an explicit job count. -/
+def buildOrTools (orToolsDir buildDir : FilePath) : IO Unit := do
+  IO.println s!"{buildDir}/lib/libortools.so not found; building OR-Tools from source. \
+    This is a one-time step and can take a long time."
+  runStreaming "cmake" #["-S", orToolsDir.toString, "-B", buildDir.toString,
+    "-DBUILD_DEPS=ON", "-DBUILD_FLATZINC=OFF", "-DBUILD_TESTING=OFF",
+    "-DBUILD_SAMPLES=OFF", "-DBUILD_EXAMPLES=OFF"]
+  let jobsArg ←
+    match ← IO.getEnv "LEANCPSAT_ORTOOLS_JOBS" with
+    | some jobs => pure s!"-j{jobs}"
+    | none => pure "-j"
+  runStreaming "cmake"
+    #["--build", buildDir.toString, "--config", "Release", "--target", "all", "-v", jobsArg]
+
 /--
-Locate the OR-Tools checkout under `or-tools/` and its CMake build tree.
-`or-tools/` is a full source checkout (not a downloaded prebuilt SDK: see
-`notes.txt` for the `cmake -S . -B build ...` invocation used to build it), so
-headers live at `or-tools/ortools/...` and the built shared libraries live at
-`or-tools/build/lib`.
+Locate the OR-Tools checkout under `or-tools/` and its CMake build tree,
+building it first if necessary. `or-tools/` is a full source checkout (not a
+downloaded prebuilt SDK), so headers live at `or-tools/ortools/...` and the
+built shared libraries live at `or-tools/build/lib`.
 -/
 def findOrToolsBuild (orToolsDir : FilePath) : IO FilePath := do
   let header := orToolsDir / "ortools" / "sat" / "cp_model.h"
@@ -17,7 +46,10 @@ def findOrToolsBuild (orToolsDir : FilePath) : IO FilePath := do
   let buildDir := orToolsDir / "build"
   let lib := buildDir / "lib" / "libortools.so"
   unless (← lib.pathExists) do
-    throw <| IO.userError s!"{lib} not found. Build OR-Tools first: cmake -S {orToolsDir} -B {buildDir} -DBUILD_DEPS=ON ... && cmake --build {buildDir}."
+    buildOrTools orToolsDir buildDir
+    unless (← lib.pathExists) do
+      throw <| IO.userError
+        s!"{lib} still missing after building OR-Tools; check the build output above for errors."
   return buildDir
 
 def orToolsDir : FilePath := __dir__ / "or-tools"
