@@ -1,0 +1,138 @@
+// Copyright 2010-2025 Google LLC
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+#include "ortools/graph/assignment.h"
+
+#include <algorithm>
+#include <cstdint>
+#include <limits>
+#include <optional>
+#include <vector>
+
+#include "ortools/graph/linear_assignment.h"
+#include "ortools/graph_base/graph.h"
+
+namespace operations_research {
+
+SimpleLinearSumAssignment::SimpleLinearSumAssignment() : num_nodes_(0) {}
+
+SimpleLinearSumAssignment::ArcIndex SimpleLinearSumAssignment::AddArcWithCost(
+    NodeIndex left_node, NodeIndex right_node, CostValue cost) {
+  const ArcIndex num_arcs = arc_cost_.size();
+  num_nodes_ = std::max(num_nodes_, left_node + 1);
+  num_nodes_ = std::max(num_nodes_, right_node + 1);
+  arc_tail_.push_back(left_node);
+  arc_head_.push_back(right_node);
+  arc_cost_.push_back(cost);
+  return num_arcs;
+}
+
+SimpleLinearSumAssignment::NodeIndex SimpleLinearSumAssignment::NumNodes()
+    const {
+  return num_nodes_;
+}
+
+SimpleLinearSumAssignment::ArcIndex SimpleLinearSumAssignment::NumArcs() const {
+  return arc_cost_.size();
+}
+
+SimpleLinearSumAssignment::NodeIndex SimpleLinearSumAssignment::LeftNode(
+    ArcIndex arc) const {
+  return arc_tail_[arc];
+}
+
+SimpleLinearSumAssignment::NodeIndex SimpleLinearSumAssignment::RightNode(
+    ArcIndex arc) const {
+  return arc_head_[arc];
+}
+
+SimpleLinearSumAssignment::CostValue SimpleLinearSumAssignment::Cost(
+    ArcIndex arc) const {
+  return arc_cost_[arc];
+}
+
+SimpleLinearSumAssignment::Status SimpleLinearSumAssignment::Solve() {
+  optimal_cost_ = 0;
+  assignment_arcs_.clear();
+  if (NumNodes() == 0) return OPTIMAL;
+
+  // HACK(user): Detect overflows early. In ./linear_assignment.h, the cost of
+  // each arc is internally multiplied by cost_scaling_factor_ (which is equal
+  // to (num_nodes + 1)) without overflow checking.
+  const CostValue max_supported_arc_cost =
+      std::numeric_limits<CostValue>::max() / (NumNodes() + 1);
+  for (const CostValue unscaled_arc_cost : arc_cost_) {
+    if (unscaled_arc_cost > max_supported_arc_cost) return POSSIBLE_OVERFLOW;
+  }
+
+  // Fast path if the graph is complete.
+  if (const auto solve_satus = SolveIfCompleteBipartite()) {
+    return *solve_satus;
+  }
+
+  const ArcIndex num_arcs = arc_cost_.size();
+  ::util::ListGraph<> graph(2 * num_nodes_, num_arcs);
+  LinearSumAssignment<::util::ListGraph<>, CostValue> assignment(graph,
+                                                                 num_nodes_);
+  for (ArcIndex arc = 0; arc < num_arcs; ++arc) {
+    graph.AddArc(arc_tail_[arc], num_nodes_ + arc_head_[arc]);
+    assignment.SetArcCost(arc, arc_cost_[arc]);
+  }
+  // TODO(user): Improve the LinearSumAssignment api to clearly define
+  // the error cases.
+  if (!assignment.FinalizeSetup()) return POSSIBLE_OVERFLOW;
+  if (!assignment.ComputeAssignment()) return INFEASIBLE;
+  optimal_cost_ = assignment.GetCost();
+  for (NodeIndex node = 0; node < num_nodes_; ++node) {
+    assignment_arcs_.push_back(assignment.GetAssignmentArc(node));
+  }
+  return OPTIMAL;
+}
+
+std::optional<SimpleLinearSumAssignment::Status>
+SimpleLinearSumAssignment::SolveIfCompleteBipartite() {
+  // Quick check: only do something if we have the correct number of arcs.
+  const ArcIndex num_arcs = arc_cost_.size();
+  if (static_cast<int64_t>(num_arcs) !=
+      static_cast<int64_t>(num_nodes_) * num_nodes_) {
+    return std::nullopt;
+  }
+
+  // If there are no duplicate arcs, this is a complete bipartite graph!
+  // Otherwise, we will fall back to the general case.
+  ::util::CompleteBipartiteGraph<> graph(num_nodes_, num_nodes_);
+  std::vector<int> reverse_mapping(num_arcs, -1);
+  LinearSumAssignment<::util::CompleteBipartiteGraph<>, CostValue> assignment(
+      graph, num_nodes_);
+
+  for (ArcIndex user_index = 0; user_index < num_arcs; ++user_index) {
+    const ::util::CompleteBipartiteGraph<>::ArcIndex new_index =
+        graph.GetArc(arc_tail_[user_index], num_nodes_ + arc_head_[user_index]);
+
+    // Abort if we have duplicate arcs.
+    if (reverse_mapping[new_index] != -1) return std::nullopt;
+    reverse_mapping[new_index] = user_index;
+    assignment.SetArcCost(new_index, arc_cost_[user_index]);
+  }
+
+  if (!assignment.FinalizeSetup()) return POSSIBLE_OVERFLOW;
+  if (!assignment.ComputeAssignment()) return INFEASIBLE;
+  optimal_cost_ = assignment.GetCost();
+  for (NodeIndex node = 0; node < num_nodes_; ++node) {
+    assignment_arcs_.push_back(
+        reverse_mapping[assignment.GetAssignmentArc(node)]);
+  }
+  return OPTIMAL;
+}
+
+}  // namespace operations_research

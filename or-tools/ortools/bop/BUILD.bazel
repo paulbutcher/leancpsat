@@ -1,0 +1,457 @@
+# Copyright 2010-2025 Google LLC
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+load("@protobuf//bazel:cc_proto_library.bzl", "cc_proto_library")
+load("@protobuf//bazel:proto_library.bzl", "proto_library")
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+load("@rules_cc//cc:cc_test.bzl", "cc_test")
+load("//ortools/copts:configure_copts.bzl", "ORTOOLS_DEFAULT_COPTS", "ORTOOLS_DEFAULT_LINKOPTS", "ORTOOLS_TEST_COPTS")
+
+package(default_visibility = ["//visibility:public"])
+
+proto_library(
+    name = "bop_parameters_proto",
+    srcs = ["bop_parameters.proto"],
+)
+
+proto_library(
+    name = "boolean_problem_proto",
+    srcs = ["boolean_problem.proto"],
+)
+
+cc_proto_library(
+    name = "boolean_problem_cc_proto",
+    deps = [":boolean_problem_proto"],
+)
+
+cc_proto_library(
+    name = "bop_parameters_cc_proto",
+    deps = [":bop_parameters_proto"],
+)
+
+cc_library(
+    name = "bop_types",
+    hdrs = ["bop_types.h"],
+    copts = ORTOOLS_DEFAULT_COPTS,
+    linkopts = ORTOOLS_DEFAULT_LINKOPTS,
+    deps = [
+        "//ortools/base:strong_vector",
+        "//ortools/util:strong_integers",
+    ],
+)
+
+cc_library(
+    name = "bop_base",
+    srcs = ["bop_base.cc"],
+    hdrs = ["bop_base.h"],
+    copts = ORTOOLS_DEFAULT_COPTS,
+    linkopts = ORTOOLS_DEFAULT_LINKOPTS,
+    deps = [
+        ":boolean_problem_cc_proto",
+        ":bop_parameters_cc_proto",
+        ":bop_solution",
+        ":bop_types",
+        "//ortools/base:strong_vector",
+        "//ortools/base:types",
+        "//ortools/lp_data:lp_types",
+        "//ortools/sat:clause",
+        "//ortools/sat:sat_base",
+        "//ortools/util:stats",
+        "//ortools/util:strong_integers",
+        "//ortools/util:time_limit",
+        "@abseil-cpp//absl/base:core_headers",
+        "@abseil-cpp//absl/log",
+        "@abseil-cpp//absl/log:check",
+        "@abseil-cpp//absl/strings",
+        "@abseil-cpp//absl/synchronization",
+    ],
+)
+
+cc_library(
+    name = "bop_util",
+    srcs = ["bop_util.cc"],
+    hdrs = ["bop_util.h"],
+    copts = ORTOOLS_DEFAULT_COPTS,
+    linkopts = ORTOOLS_DEFAULT_LINKOPTS,
+    deps = [
+        ":boolean_problem",
+        ":boolean_problem_cc_proto",
+        ":bop_base",
+        ":bop_solution",
+        ":bop_types",
+        "//ortools/base:strong_vector",
+        "//ortools/base:types",
+        "//ortools/sat:pb_constraint",
+        "//ortools/sat:restart",
+        "//ortools/sat:sat_base",
+        "//ortools/sat:sat_solver",
+        "//ortools/util:bitset",
+        "//ortools/util:strong_integers",
+        "@abseil-cpp//absl/log:check",
+    ],
+)
+
+cc_library(
+    name = "bop_solution",
+    srcs = ["bop_solution.cc"],
+    hdrs = ["bop_solution.h"],
+    copts = ORTOOLS_DEFAULT_COPTS,
+    linkopts = ORTOOLS_DEFAULT_LINKOPTS,
+    deps = [
+        ":boolean_problem",
+        ":boolean_problem_cc_proto",
+        ":bop_types",
+        "//ortools/base:strong_vector",
+        "//ortools/sat:pb_constraint",
+        "@abseil-cpp//absl/log:check",
+        "@abseil-cpp//absl/strings",
+    ],
+)
+
+cc_test(
+    name = "bop_solution_test",
+    size = "small",
+    srcs = ["bop_solution_test.cc"],
+    copts = ORTOOLS_TEST_COPTS,
+    linkopts = ORTOOLS_DEFAULT_LINKOPTS,
+    deps = [
+        ":boolean_problem_cc_proto",
+        ":bop_solution",
+        ":bop_types",
+        "//ortools/base:gmock_main",
+        "//ortools/util:strong_integers",
+        "@abseil-cpp//absl/log:check",
+        "@protobuf",
+    ],
+)
+
+cc_library(
+    name = "bop_fs",
+    srcs = ["bop_fs.cc"],
+    hdrs = ["bop_fs.h"],
+    copts = ORTOOLS_DEFAULT_COPTS,
+    linkopts = ORTOOLS_DEFAULT_LINKOPTS,
+    deps = [
+        ":boolean_problem",
+        ":boolean_problem_cc_proto",
+        ":bop_base",
+        ":bop_parameters_cc_proto",
+        ":bop_solution",
+        ":bop_types",
+        ":bop_util",
+        ":lp_utils",
+        "//ortools/algorithms:sparse_permutation",
+        "//ortools/base:strong_vector",
+        "//ortools/base:types",
+        "//ortools/glop:lp_solver",
+        "//ortools/glop:parameters_cc_proto",
+        "//ortools/lp_data",
+        "//ortools/lp_data:lp_types",
+        "//ortools/sat:clause",
+        "//ortools/sat:pb_constraint",
+        "//ortools/sat:sat_base",
+        "//ortools/sat:sat_parameters_cc_proto",
+        "//ortools/sat:sat_solver",
+        "//ortools/sat:symmetry",
+        "//ortools/sat:util",
+        "//ortools/util:strong_integers",
+        "//ortools/util:time_limit",
+        "@abseil-cpp//absl/log",
+        "@abseil-cpp//absl/log:check",
+        "@abseil-cpp//absl/random:bit_gen_ref",
+        "@abseil-cpp//absl/random:distributions",
+        "@abseil-cpp//absl/strings",
+        "@abseil-cpp//absl/strings:str_format",
+    ],
+)
+
+cc_library(
+    name = "bop_lns",
+    srcs = ["bop_lns.cc"],
+    hdrs = ["bop_lns.h"],
+    copts = ORTOOLS_DEFAULT_COPTS,
+    linkopts = ORTOOLS_DEFAULT_LINKOPTS,
+    deps = [
+        ":boolean_problem",
+        ":boolean_problem_cc_proto",
+        ":bop_base",
+        ":bop_parameters_cc_proto",
+        ":bop_solution",
+        ":bop_types",
+        ":bop_util",
+        ":lp_utils",
+        "//ortools/base:strong_vector",
+        "//ortools/glop:lp_solver",
+        "//ortools/lp_data",
+        "//ortools/lp_data:lp_types",
+        "//ortools/sat:pb_constraint",
+        "//ortools/sat:sat_base",
+        "//ortools/sat:sat_parameters_cc_proto",
+        "//ortools/sat:sat_solver",
+        "//ortools/util:stats",
+        "//ortools/util:strong_integers",
+        "//ortools/util:time_limit",
+        "@abseil-cpp//absl/cleanup",
+        "@abseil-cpp//absl/log",
+        "@abseil-cpp//absl/log:check",
+        "@abseil-cpp//absl/random:bit_gen_ref",
+        "@abseil-cpp//absl/random:distributions",
+        "@abseil-cpp//absl/strings",
+    ],
+)
+
+cc_library(
+    name = "complete_optimizer",
+    srcs = ["complete_optimizer.cc"],
+    hdrs = ["complete_optimizer.h"],
+    copts = ORTOOLS_DEFAULT_COPTS,
+    linkopts = ORTOOLS_DEFAULT_LINKOPTS,
+    deps = [
+        ":boolean_problem_cc_proto",
+        ":bop_base",
+        ":bop_parameters_cc_proto",
+        ":bop_solution",
+        ":bop_types",
+        ":bop_util",
+        "//ortools/sat:encoding",
+        "//ortools/sat:model",
+        "//ortools/sat:pb_constraint",
+        "//ortools/sat:sat_base",
+        "//ortools/sat:sat_parameters_cc_proto",
+        "//ortools/sat:sat_solver",
+        "//ortools/util:stats",
+        "//ortools/util:strong_integers",
+        "//ortools/util:time_limit",
+        "@abseil-cpp//absl/log:check",
+        "@abseil-cpp//absl/strings",
+    ],
+)
+
+cc_library(
+    name = "bop_ls",
+    srcs = ["bop_ls.cc"],
+    hdrs = ["bop_ls.h"],
+    copts = ORTOOLS_DEFAULT_COPTS,
+    linkopts = ORTOOLS_DEFAULT_LINKOPTS,
+    deps = [
+        ":boolean_problem_cc_proto",
+        ":bop_base",
+        ":bop_parameters_cc_proto",
+        ":bop_solution",
+        ":bop_types",
+        ":bop_util",
+        "//ortools/base:log_severity",
+        "//ortools/base:strong_vector",
+        "//ortools/base:types",
+        "//ortools/sat:sat_base",
+        "//ortools/sat:sat_solver",
+        "//ortools/util:strong_integers",
+        "//ortools/util:time_limit",
+        "@abseil-cpp//absl/container:flat_hash_map",
+        "@abseil-cpp//absl/container:flat_hash_set",
+        "@abseil-cpp//absl/log",
+        "@abseil-cpp//absl/log:check",
+        "@abseil-cpp//absl/random",
+        "@abseil-cpp//absl/random:bit_gen_ref",
+        "@abseil-cpp//absl/strings",
+        "@abseil-cpp//absl/strings:str_format",
+        "@abseil-cpp//absl/types:span",
+    ],
+)
+
+cc_library(
+    name = "bop_portfolio",
+    srcs = ["bop_portfolio.cc"],
+    hdrs = ["bop_portfolio.h"],
+    copts = ORTOOLS_DEFAULT_COPTS,
+    linkopts = ORTOOLS_DEFAULT_LINKOPTS,
+    deps = [
+        ":boolean_problem",
+        ":boolean_problem_cc_proto",
+        ":bop_base",
+        ":bop_fs",
+        ":bop_lns",
+        ":bop_ls",
+        ":bop_parameters_cc_proto",
+        ":bop_solution",
+        ":bop_types",
+        ":bop_util",
+        ":complete_optimizer",
+        "//ortools/algorithms:sparse_permutation",
+        "//ortools/base:stl_util",
+        "//ortools/base:strong_vector",
+        "//ortools/base:types",
+        "//ortools/glop:lp_solver",
+        "//ortools/lp_data:lp_types",
+        "//ortools/sat:sat_solver",
+        "//ortools/sat:symmetry",
+        "//ortools/util:random_engine",
+        "//ortools/util:stats",
+        "//ortools/util:strong_integers",
+        "//ortools/util:time_limit",
+        "@abseil-cpp//absl/log",
+        "@abseil-cpp//absl/log:check",
+        "@abseil-cpp//absl/log:vlog_is_on",
+        "@abseil-cpp//absl/strings",
+        "@abseil-cpp//absl/strings:str_format",
+    ],
+)
+
+cc_library(
+    name = "bop_solver",
+    srcs = ["bop_solver.cc"],
+    hdrs = ["bop_solver.h"],
+    copts = ORTOOLS_DEFAULT_COPTS,
+    linkopts = ORTOOLS_DEFAULT_LINKOPTS,
+    deps = [
+        ":boolean_problem",
+        ":boolean_problem_cc_proto",
+        ":bop_base",
+        ":bop_parameters_cc_proto",
+        ":bop_portfolio",
+        ":bop_solution",
+        ":bop_types",
+        "//ortools/base:threadpool",
+        "//ortools/lp_data:lp_types",
+        "//ortools/sat:pb_constraint",
+        "//ortools/util:stats",
+        "//ortools/util:time_limit",
+        "@abseil-cpp//absl/log",
+        "@abseil-cpp//absl/log:check",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/strings:str_format",
+        "@protobuf",
+    ],
+)
+
+cc_library(
+    name = "integral_solver",
+    srcs = ["integral_solver.cc"],
+    hdrs = ["integral_solver.h"],
+    copts = ORTOOLS_DEFAULT_COPTS,
+    linkopts = ORTOOLS_DEFAULT_LINKOPTS,
+    deps = [
+        ":boolean_problem",
+        ":boolean_problem_cc_proto",
+        ":bop_parameters_cc_proto",
+        ":bop_solution",
+        ":bop_solver",
+        ":bop_types",
+        "//ortools/base:strong_vector",
+        "//ortools/base:threadpool",
+        "//ortools/base:types",
+        "//ortools/lp_data",
+        "//ortools/lp_data:lp_decomposer",
+        "//ortools/lp_data:lp_types",
+        "//ortools/lp_data:lp_utils",
+        "//ortools/lp_data:sparse",
+        "//ortools/lp_data:sparse_column",
+        "//ortools/lp_data:sparse_vector",
+        "//ortools/util:bitset",
+        "//ortools/util:fp_utils",
+        "//ortools/util:strong_integers",
+        "//ortools/util:time_limit",
+        "@abseil-cpp//absl/base:core_headers",
+        "@abseil-cpp//absl/log",
+        "@abseil-cpp//absl/log:check",
+        "@abseil-cpp//absl/strings:str_format",
+    ],
+)
+
+cc_library(
+    name = "lp_utils",
+    srcs = ["lp_utils.cc"],
+    hdrs = ["lp_utils.h"],
+    copts = ORTOOLS_DEFAULT_COPTS,
+    linkopts = ORTOOLS_DEFAULT_LINKOPTS,
+    deps = [
+        ":boolean_problem",
+        ":boolean_problem_cc_proto",
+        "//ortools/base:types",
+        "//ortools/linear_solver:linear_solver_cc_proto",
+        "//ortools/lp_data",
+        "//ortools/lp_data:lp_types",
+        "//ortools/util:fp_utils",
+        "@abseil-cpp//absl/log",
+        "@abseil-cpp//absl/log:check",
+    ],
+)
+
+cc_test(
+    name = "lp_utils_test",
+    srcs = ["lp_utils_test.cc"],
+    copts = ORTOOLS_TEST_COPTS,
+    linkopts = ORTOOLS_DEFAULT_LINKOPTS,
+    deps = [
+        ":boolean_problem_cc_proto",
+        ":lp_utils",
+        "//ortools/base:gmock_main",
+        "//ortools/linear_solver:linear_solver_cc_proto",
+        "//ortools/lp_data",
+        "//ortools/lp_data:proto_utils",
+        "//ortools/sat:cp_model_cc_proto",
+        "//ortools/sat:sat_parameters_cc_proto",
+        "//ortools/util:fp_utils",
+        "@abseil-cpp//absl/random",
+        "@abseil-cpp//absl/strings:str_format",
+    ],
+)
+
+cc_library(
+    name = "boolean_problem",
+    srcs = ["boolean_problem.cc"],
+    hdrs = ["boolean_problem.h"],
+    copts = ORTOOLS_DEFAULT_COPTS,
+    linkopts = ORTOOLS_DEFAULT_LINKOPTS,
+    deps = [
+        ":boolean_problem_cc_proto",
+        "//ortools/algorithms:find_graph_symmetries",
+        "//ortools/algorithms:sparse_permutation",
+        "//ortools/base:strong_vector",
+        "//ortools/base:types",
+        "//ortools/base/macros:os_support",
+        "//ortools/graph_base:graph",
+        "//ortools/graph_base:io",
+        "//ortools/graph_base:util",
+        "//ortools/port:proto_utils",
+        "//ortools/sat:cp_model_cc_proto",
+        "//ortools/sat:pb_constraint",
+        "//ortools/sat:sat_base",
+        "//ortools/sat:sat_parameters_cc_proto",
+        "//ortools/sat:sat_solver",
+        "//ortools/sat:simplification",
+        "//ortools/util:strong_integers",
+        "@abseil-cpp//absl/container:flat_hash_map",
+        "@abseil-cpp//absl/flags:flag",
+        "@abseil-cpp//absl/log",
+        "@abseil-cpp//absl/log:check",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/strings:str_format",
+        "@abseil-cpp//absl/strings:string_view",
+        "@abseil-cpp//absl/types:span",
+    ],
+)
+
+cc_test(
+    name = "boolean_problem_test",
+    srcs = ["boolean_problem_test.cc"],
+    copts = ORTOOLS_TEST_COPTS,
+    linkopts = ORTOOLS_DEFAULT_LINKOPTS,
+    deps = [
+        ":boolean_problem",
+        "//ortools/base:gmock_main",
+        "//ortools/sat:pb_constraint",
+        "//ortools/sat:sat_base",
+        "@abseil-cpp//absl/types:span",
+    ],
+)

@@ -1,0 +1,926 @@
+# Copyright 2010-2025 Google LLC
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+load("@protobuf//bazel:cc_proto_library.bzl", "cc_proto_library")
+load("@protobuf//bazel:java_proto_library.bzl", "java_proto_library")
+load("@protobuf//bazel:proto_library.bzl", "proto_library")
+load("@protobuf//bazel:py_proto_library.bzl", "py_proto_library")
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+load("@rules_cc//cc:cc_test.bzl", "cc_test")
+load("//ortools/copts:configure_copts.bzl", "ORTOOLS_DEFAULT_COPTS", "ORTOOLS_DEFAULT_LINKOPTS", "ORTOOLS_TEST_COPTS")
+
+package(default_visibility = ["//visibility:public"])
+
+cc_library(
+    name = "gscip_solver",
+    srcs = [
+        "gscip_solver.cc",
+        "gscip_solver.h",
+    ],
+    copts = ORTOOLS_DEFAULT_COPTS,
+    linkopts = ORTOOLS_DEFAULT_LINKOPTS,
+    deps = [
+        ":message_callback_data",
+        "//ortools/base:map_util",
+        "//ortools/base:protoutil",
+        "//ortools/base:status_builder",
+        "//ortools/math_opt:callback_cc_proto",
+        "//ortools/math_opt:infeasible_subsystem_cc_proto",
+        "//ortools/math_opt:model_cc_proto",
+        "//ortools/math_opt:model_parameters_cc_proto",
+        "//ortools/math_opt:model_update_cc_proto",
+        "//ortools/math_opt:parameters_cc_proto",
+        "//ortools/math_opt:result_cc_proto",
+        "//ortools/math_opt:solution_cc_proto",
+        "//ortools/math_opt:sparse_containers_cc_proto",
+        "//ortools/math_opt/core:invalid_indicators",
+        "//ortools/math_opt/core:inverted_bounds",
+        "//ortools/math_opt/core:math_opt_proto_utils",
+        "//ortools/math_opt/core:solver_interface",
+        "//ortools/math_opt/core:sparse_submatrix",
+        "//ortools/math_opt/core:sparse_vector_view",
+        "//ortools/math_opt/solvers/gscip",
+        "//ortools/math_opt/solvers/gscip:gscip_cc_proto",
+        "//ortools/math_opt/solvers/gscip:gscip_parameters",
+        "//ortools/math_opt/solvers/gscip:math_opt_gscip_solver_constraint_handler",
+        "//ortools/math_opt/validators:callback_validator",
+        "//ortools/util:solve_interrupter",
+        "@abseil-cpp//absl/base:nullability",
+        "@abseil-cpp//absl/cleanup",
+        "@abseil-cpp//absl/container:flat_hash_map",
+        "@abseil-cpp//absl/container:flat_hash_set",
+        "@abseil-cpp//absl/container:linked_hash_map",
+        "@abseil-cpp//absl/log",
+        "@abseil-cpp//absl/log:check",
+        "@abseil-cpp//absl/log:die_if_null",
+        "@abseil-cpp//absl/memory",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:status_macros",
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/strings",
+        "@abseil-cpp//absl/time",
+        "@abseil-cpp//absl/types:span",
+        "@protobuf",
+        "@scip",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "gurobi_callback",
+    srcs = ["gurobi_callback.cc"],
+    hdrs = ["gurobi_callback.h"],
+    copts = ORTOOLS_DEFAULT_COPTS,
+    linkopts = ORTOOLS_DEFAULT_LINKOPTS,
+    tags = [
+        "not_build:arm",
+        "not_run:arm",
+    ],
+    deps = [
+        ":message_callback_data",
+        "//ortools/base:protoutil",
+        "//ortools/math_opt:callback_cc_proto",
+        "//ortools/math_opt:solution_cc_proto",
+        "//ortools/math_opt:sparse_containers_cc_proto",
+        "//ortools/math_opt/core:math_opt_proto_utils",
+        "//ortools/math_opt/core:solver_interface",
+        "//ortools/math_opt/core:sparse_vector_view",
+        "//ortools/math_opt/solvers/gurobi:g_gurobi",
+        "//ortools/util:solve_interrupter",
+        "@abseil-cpp//absl/container:flat_hash_set",
+        "@abseil-cpp//absl/container:linked_hash_map",
+        "@abseil-cpp//absl/log",
+        "@abseil-cpp//absl/log:check",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:status_macros",
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/strings",
+        "@abseil-cpp//absl/time",
+        "@abseil-cpp//absl/types:span",
+    ],
+)
+
+cc_library(
+    name = "gurobi_solver",
+    srcs = [
+        "gurobi_init_arguments.cc",
+        "gurobi_solver.cc",
+        "gurobi_solver.h",
+    ],
+    hdrs = [
+        "gurobi_init_arguments.h",
+    ],
+    copts = ORTOOLS_DEFAULT_COPTS,
+    linkopts = ORTOOLS_DEFAULT_LINKOPTS,
+    tags = [
+        "not_build:arm",
+        "not_run:arm",
+    ],
+    deps = [
+        ":gurobi_callback",
+        ":gurobi_cc_proto",
+        ":message_callback_data",
+        "//ortools/base:map_util",
+        "//ortools/base:protoutil",
+        "//ortools/base:types",
+        "//ortools/gurobi/isv_public:gurobi_isv",
+        "//ortools/math_opt:callback_cc_proto",
+        "//ortools/math_opt:infeasible_subsystem_cc_proto",
+        "//ortools/math_opt:model_cc_proto",
+        "//ortools/math_opt:model_parameters_cc_proto",
+        "//ortools/math_opt:model_update_cc_proto",
+        "//ortools/math_opt:parameters_cc_proto",
+        "//ortools/math_opt:result_cc_proto",
+        "//ortools/math_opt:solution_cc_proto",
+        "//ortools/math_opt:sparse_containers_cc_proto",
+        "//ortools/math_opt/core:invalid_indicators",
+        "//ortools/math_opt/core:inverted_bounds",
+        "//ortools/math_opt/core:math_opt_proto_utils",
+        "//ortools/math_opt/core:non_streamable_solver_init_arguments",
+        "//ortools/math_opt/core:solver_interface",
+        "//ortools/math_opt/core:sorted",
+        "//ortools/math_opt/core:sparse_vector_view",
+        "//ortools/math_opt/solvers/gurobi:g_gurobi",
+        "//ortools/math_opt/validators:callback_validator",
+        "//ortools/util:solve_interrupter",
+        "//ortools/util:testing_utils",
+        "@abseil-cpp//absl/algorithm:container",
+        "@abseil-cpp//absl/base:nullability",
+        "@abseil-cpp//absl/container:flat_hash_map",
+        "@abseil-cpp//absl/container:flat_hash_set",
+        "@abseil-cpp//absl/container:linked_hash_map",
+        "@abseil-cpp//absl/log",
+        "@abseil-cpp//absl/log:check",
+        "@abseil-cpp//absl/memory",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:status_macros",
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/strings",
+        "@abseil-cpp//absl/time",
+        "@abseil-cpp//absl/types:span",
+        "@protobuf",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "glop_solver",
+    srcs = [
+        "glop_solver.cc",
+        "glop_solver.h",
+    ],
+    copts = ORTOOLS_DEFAULT_COPTS,
+    linkopts = ORTOOLS_DEFAULT_LINKOPTS,
+    deps = [
+        "//ortools/base:map_util",
+        "//ortools/base:protoutil",
+        "//ortools/base:status_builder",
+        "//ortools/base:strong_vector",
+        "//ortools/glop:lp_solver",
+        "//ortools/glop:parameters_cc_proto",
+        "//ortools/glop:parameters_validation",
+        "//ortools/lp_data",
+        "//ortools/lp_data:lp_types",
+        "//ortools/math_opt:callback_cc_proto",
+        "//ortools/math_opt:infeasible_subsystem_cc_proto",
+        "//ortools/math_opt:model_cc_proto",
+        "//ortools/math_opt:model_parameters_cc_proto",
+        "//ortools/math_opt:model_update_cc_proto",
+        "//ortools/math_opt:parameters_cc_proto",
+        "//ortools/math_opt:result_cc_proto",
+        "//ortools/math_opt:solution_cc_proto",
+        "//ortools/math_opt:sparse_containers_cc_proto",
+        "//ortools/math_opt/core:inverted_bounds",
+        "//ortools/math_opt/core:math_opt_proto_utils",
+        "//ortools/math_opt/core:solver_interface",
+        "//ortools/math_opt/core:sparse_vector_view",
+        "//ortools/math_opt/validators:callback_validator",
+        "//ortools/util:logging",
+        "//ortools/util:solve_interrupter",
+        "//ortools/util:strong_integers",
+        "//ortools/util:time_limit",
+        "@abseil-cpp//absl/base:nullability",
+        "@abseil-cpp//absl/cleanup",
+        "@abseil-cpp//absl/container:flat_hash_map",
+        "@abseil-cpp//absl/functional:overload",
+        "@abseil-cpp//absl/log",
+        "@abseil-cpp//absl/log:check",
+        "@abseil-cpp//absl/memory",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:status_macros",
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/strings",
+        "@abseil-cpp//absl/time",
+        "@abseil-cpp//absl/types:span",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "cp_sat_solver",
+    srcs = [
+        "cp_sat_solver.cc",
+        "cp_sat_solver.h",
+    ],
+    copts = ORTOOLS_DEFAULT_COPTS,
+    linkopts = ORTOOLS_DEFAULT_LINKOPTS,
+    deps = [
+        "//ortools/base:protoutil",
+        "//ortools/base:status_builder",
+        "//ortools/linear_solver:linear_solver_cc_proto",
+        "//ortools/linear_solver/proto_solver:proto_utils",
+        "//ortools/linear_solver/proto_solver:sat_proto_solver",
+        "//ortools/math_opt:callback_cc_proto",
+        "//ortools/math_opt:infeasible_subsystem_cc_proto",
+        "//ortools/math_opt:model_cc_proto",
+        "//ortools/math_opt:model_parameters_cc_proto",
+        "//ortools/math_opt:model_update_cc_proto",
+        "//ortools/math_opt:parameters_cc_proto",
+        "//ortools/math_opt:result_cc_proto",
+        "//ortools/math_opt:solution_cc_proto",
+        "//ortools/math_opt:sparse_containers_cc_proto",
+        "//ortools/math_opt/core:inverted_bounds",
+        "//ortools/math_opt/core:math_opt_proto_utils",
+        "//ortools/math_opt/core:solver_interface",
+        "//ortools/math_opt/core:sparse_vector_view",
+        "//ortools/math_opt/io:proto_converter",
+        "//ortools/math_opt/validators:callback_validator",
+        "//ortools/sat:sat_parameters_cc_proto",
+        "//ortools/util:solve_interrupter",
+        "@abseil-cpp//absl/base:core_headers",
+        "@abseil-cpp//absl/base:nullability",
+        "@abseil-cpp//absl/container:flat_hash_set",
+        "@abseil-cpp//absl/functional:any_invocable",
+        "@abseil-cpp//absl/log",
+        "@abseil-cpp//absl/log:check",
+        "@abseil-cpp//absl/memory",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:status_macros",
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/strings",
+        "@abseil-cpp//absl/synchronization",
+        "@abseil-cpp//absl/time",
+        "@abseil-cpp//absl/types:span",
+    ],
+    alwayslink = 1,
+)
+
+cc_test(
+    name = "glop_solver_test",
+    srcs = ["glop_solver_test.cc"],
+    copts = ORTOOLS_TEST_COPTS,
+    linkopts = ORTOOLS_DEFAULT_LINKOPTS,
+    tags = ["no_test_wasm"],  # TODO(b/240593929): we should test wasm
+    deps = [
+        ":glop_solver",
+        "//ortools/base:gmock",
+        "//ortools/base:gmock_main",
+        "//ortools/math_opt/cpp:math_opt",
+        "//ortools/math_opt/solver_tests:callback_tests",
+        "//ortools/math_opt/solver_tests:generic_tests",
+        "//ortools/math_opt/solver_tests:infeasible_subsystem_tests",
+        "//ortools/math_opt/solver_tests:invalid_input_tests",
+        "//ortools/math_opt/solver_tests:logical_constraint_tests",
+        "//ortools/math_opt/solver_tests:lp_incomplete_solve_tests",
+        "//ortools/math_opt/solver_tests:lp_initial_basis_tests",
+        "//ortools/math_opt/solver_tests:lp_model_solve_parameters_tests",
+        "//ortools/math_opt/solver_tests:lp_parameter_tests",
+        "//ortools/math_opt/solver_tests:lp_tests",
+        "//ortools/math_opt/solver_tests:min_cost_flow_tests",
+        "//ortools/math_opt/solver_tests:multi_objective_tests",
+        "//ortools/math_opt/solver_tests:qc_tests",
+        "//ortools/math_opt/solver_tests:qp_tests",
+        "//ortools/math_opt/solver_tests:second_order_cone_tests",
+        "//ortools/math_opt/solver_tests:status_tests",
+        "//ortools/math_opt/solver_tests:test_models",
+        "//ortools/math_opt/testing:param_name",
+    ],
+)
+
+cc_test(
+    name = "cp_sat_solver_test",
+    srcs = ["cp_sat_solver_test.cc"],
+    copts = ORTOOLS_TEST_COPTS,
+    linkopts = ORTOOLS_DEFAULT_LINKOPTS,
+    tags = [
+        # `--config=android_arm` and `--config=android_arm64` both timeout on
+        # this test.
+        "no_test_android",
+        "noci",
+    ],
+    deps = [
+        ":cp_sat_solver",
+        "//ortools/base:gmock_main",
+        "//ortools/math_opt/cpp:matchers",
+        "//ortools/math_opt/cpp:math_opt",
+        "//ortools/math_opt/solver_tests:callback_tests",
+        "//ortools/math_opt/solver_tests:generic_tests",
+        "//ortools/math_opt/solver_tests:infeasible_subsystem_tests",
+        "//ortools/math_opt/solver_tests:invalid_input_tests",
+        "//ortools/math_opt/solver_tests:ip_model_solve_parameters_tests",
+        "//ortools/math_opt/solver_tests:ip_multiple_solutions_tests",
+        "//ortools/math_opt/solver_tests:ip_parameter_tests",
+        "//ortools/math_opt/solver_tests:logical_constraint_tests",
+        "//ortools/math_opt/solver_tests:mip_tests",
+        "//ortools/math_opt/solver_tests:multi_objective_tests",
+        "//ortools/math_opt/solver_tests:qc_tests",
+        "//ortools/math_opt/solver_tests:qp_tests",
+        "//ortools/math_opt/solver_tests:second_order_cone_tests",
+        "//ortools/math_opt/solver_tests:status_tests",
+        "//ortools/math_opt/solver_tests:test_models",
+        "//ortools/math_opt/testing:param_name",
+        "@abseil-cpp//absl/status",
+    ],
+)
+
+cc_library(
+    name = "message_callback_data",
+    srcs = ["message_callback_data.cc"],
+    hdrs = ["message_callback_data.h"],
+    copts = ORTOOLS_DEFAULT_COPTS,
+    linkopts = ORTOOLS_DEFAULT_LINKOPTS,
+    deps = [
+        "//ortools/math_opt/core:solver_interface",
+        "@abseil-cpp//absl/base:core_headers",
+        "@abseil-cpp//absl/strings",
+        "@abseil-cpp//absl/synchronization",
+    ],
+)
+
+cc_test(
+    name = "message_callback_data_test",
+    srcs = ["message_callback_data_test.cc"],
+    copts = ORTOOLS_TEST_COPTS,
+    linkopts = ORTOOLS_DEFAULT_LINKOPTS,
+    tags = ["no_test_wasm"],  # TODO(b/240593929): we should test wasm
+    deps = [
+        ":message_callback_data",
+        "//ortools/base:gmock_main",
+        "@abseil-cpp//absl/cleanup",
+        "@abseil-cpp//absl/synchronization",
+        "@abseil-cpp//absl/types:span",
+    ],
+)
+
+cc_library(
+    name = "pdlp_bridge",
+    srcs = ["pdlp_bridge.cc"],
+    hdrs = ["pdlp_bridge.h"],
+    copts = ORTOOLS_DEFAULT_COPTS,
+    linkopts = ORTOOLS_DEFAULT_LINKOPTS,
+    deps = [
+        "//ortools/math_opt:model_cc_proto",
+        "//ortools/math_opt:model_parameters_cc_proto",
+        "//ortools/math_opt:solution_cc_proto",
+        "//ortools/math_opt:sparse_containers_cc_proto",
+        "//ortools/math_opt/core:inverted_bounds",
+        "//ortools/math_opt/core:math_opt_proto_utils",
+        "//ortools/math_opt/core:sparse_vector_view",
+        "//ortools/pdlp:primal_dual_hybrid_gradient",
+        "//ortools/pdlp:quadratic_program",
+        "@abseil-cpp//absl/container:flat_hash_map",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:status_macros",
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/strings",
+        "@abseil-cpp//absl/types:span",
+        "@eigen",
+    ],
+)
+
+cc_library(
+    name = "pdlp_solver",
+    srcs = [
+        "pdlp_solver.cc",
+        "pdlp_solver.h",
+    ],
+    copts = ORTOOLS_DEFAULT_COPTS,
+    linkopts = ORTOOLS_DEFAULT_LINKOPTS,
+    deps = [
+        ":pdlp_bridge",
+        "//ortools/base:protoutil",
+        "//ortools/base:types",
+        "//ortools/math_opt:callback_cc_proto",
+        "//ortools/math_opt:infeasible_subsystem_cc_proto",
+        "//ortools/math_opt:model_cc_proto",
+        "//ortools/math_opt:model_parameters_cc_proto",
+        "//ortools/math_opt:model_update_cc_proto",
+        "//ortools/math_opt:parameters_cc_proto",
+        "//ortools/math_opt:result_cc_proto",
+        "//ortools/math_opt:solution_cc_proto",
+        "//ortools/math_opt:sparse_containers_cc_proto",
+        "//ortools/math_opt/core:inverted_bounds",
+        "//ortools/math_opt/core:math_opt_proto_utils",
+        "//ortools/math_opt/core:solver_interface",
+        "//ortools/math_opt/validators:callback_validator",
+        "//ortools/pdlp:iteration_stats",
+        "//ortools/pdlp:primal_dual_hybrid_gradient",
+        "//ortools/pdlp:quadratic_program",
+        "//ortools/pdlp:solve_log_cc_proto",
+        "//ortools/pdlp:solvers_cc_proto",
+        "//ortools/util:solve_interrupter",
+        "@abseil-cpp//absl/base:nullability",
+        "@abseil-cpp//absl/log",
+        "@abseil-cpp//absl/memory",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:status_macros",
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/strings",
+        "@abseil-cpp//absl/time",
+    ],
+    alwayslink = 1,
+)
+
+cc_test(
+    name = "pdlp_solver_test",
+    size = "small",
+    srcs = ["pdlp_solver_test.cc"],
+    copts = ORTOOLS_TEST_COPTS,
+    linkopts = ORTOOLS_DEFAULT_LINKOPTS,
+    deps = [
+        ":pdlp_solver",
+        "//ortools/base:gmock",
+        "//ortools/base:gmock_main",
+        "//ortools/math_opt:model_parameters_cc_proto",
+        "//ortools/math_opt:sparse_containers_cc_proto",
+        "//ortools/math_opt/core:solver",
+        "//ortools/math_opt/cpp:math_opt",
+        "//ortools/math_opt/solver_tests:callback_tests",
+        "//ortools/math_opt/solver_tests:generic_tests",
+        "//ortools/math_opt/solver_tests:infeasible_subsystem_tests",
+        "//ortools/math_opt/solver_tests:invalid_input_tests",
+        "//ortools/math_opt/solver_tests:logical_constraint_tests",
+        "//ortools/math_opt/solver_tests:lp_incomplete_solve_tests",
+        "//ortools/math_opt/solver_tests:lp_model_solve_parameters_tests",
+        "//ortools/math_opt/solver_tests:lp_parameter_tests",
+        "//ortools/math_opt/solver_tests:lp_tests",
+        "//ortools/math_opt/solver_tests:min_cost_flow_tests",
+        "//ortools/math_opt/solver_tests:multi_objective_tests",
+        "//ortools/math_opt/solver_tests:qc_tests",
+        "//ortools/math_opt/solver_tests:qp_tests",
+        "//ortools/math_opt/solver_tests:second_order_cone_tests",
+        "//ortools/math_opt/solver_tests:status_tests",
+        "//ortools/math_opt/solver_tests:test_models",
+        "//ortools/math_opt/testing:param_name",
+        "//ortools/pdlp:solve_log_cc_proto",
+        "@abseil-cpp//absl/status",
+    ],
+)
+
+cc_library(
+    name = "glpk_solver",
+    srcs = [
+        "glpk_solver.cc",
+        "glpk_solver.h",
+    ],
+    copts = ORTOOLS_DEFAULT_COPTS,
+    linkopts = ORTOOLS_DEFAULT_LINKOPTS,
+    target_compatible_with = select({
+        "//ortools/linear_solver:use_glpk": [],
+        "//conditions:default": ["@platforms//:incompatible"],
+    }),
+    deps = [
+        ":glpk_cc_proto",
+        ":message_callback_data",
+        "//ortools/base:protoutil",
+        "//ortools/base:status_builder",
+        "//ortools/base:types",
+        "//ortools/math_opt:callback_cc_proto",
+        "//ortools/math_opt:infeasible_subsystem_cc_proto",
+        "//ortools/math_opt:model_cc_proto",
+        "//ortools/math_opt:model_parameters_cc_proto",
+        "//ortools/math_opt:model_update_cc_proto",
+        "//ortools/math_opt:parameters_cc_proto",
+        "//ortools/math_opt:result_cc_proto",
+        "//ortools/math_opt:solution_cc_proto",
+        "//ortools/math_opt:sparse_containers_cc_proto",
+        "//ortools/math_opt/core:empty_bounds",
+        "//ortools/math_opt/core:inverted_bounds",
+        "//ortools/math_opt/core:math_opt_proto_utils",
+        "//ortools/math_opt/core:solver_interface",
+        "//ortools/math_opt/core:sparse_submatrix",
+        "//ortools/math_opt/core:sparse_vector_view",
+        "//ortools/math_opt/solvers/glpk:gap",
+        "//ortools/math_opt/solvers/glpk:glpk_sparse_vector",
+        "//ortools/math_opt/solvers/glpk:rays",
+        "//ortools/math_opt/validators:callback_validator",
+        "//ortools/third_party_solvers/glpk:glpk_env_deleter",
+        "//ortools/third_party_solvers/glpk:glpk_formatters",
+        "//ortools/util:solve_interrupter",
+        "//third_party/gloop/base:sysinfo",
+        "@abseil-cpp//absl/base:nullability",
+        "@abseil-cpp//absl/cleanup",
+        "@abseil-cpp//absl/container:flat_hash_map",
+        "@abseil-cpp//absl/log",
+        "@abseil-cpp//absl/log:check",
+        "@abseil-cpp//absl/memory",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:status_macros",
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/strings",
+        "@abseil-cpp//absl/time",
+        "@abseil-cpp//absl/types:span",
+        "@glpk",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "min_cost_flow_solver",
+    srcs = [
+        "min_cost_flow_solver.cc",
+        "min_cost_flow_solver.h",
+    ],
+    copts = ORTOOLS_DEFAULT_COPTS,
+    linkopts = ORTOOLS_DEFAULT_LINKOPTS,
+    deps = [
+        "//ortools/base:map_util",
+        "//ortools/base:protoutil",
+        "//ortools/base:status_builder",
+        "//ortools/base:strong_int",
+        "//ortools/base:strong_vector",
+        "//ortools/graph:min_cost_flow",
+        "//ortools/math_opt:callback_cc_proto",
+        "//ortools/math_opt:infeasible_subsystem_cc_proto",
+        "//ortools/math_opt:model_cc_proto",
+        "//ortools/math_opt:model_parameters_cc_proto",
+        "//ortools/math_opt:model_update_cc_proto",
+        "//ortools/math_opt:parameters_cc_proto",
+        "//ortools/math_opt:result_cc_proto",
+        "//ortools/math_opt:solution_cc_proto",
+        "//ortools/math_opt:sparse_containers_cc_proto",
+        "//ortools/math_opt/core:math_opt_proto_utils",
+        "//ortools/math_opt/core:solver_interface",
+        "//ortools/math_opt/validators:callback_validator",
+        "//ortools/util:fp_roundtrip_conv",
+        "//ortools/util:solve_interrupter",
+        "//ortools/util:status_macros",
+        "@abseil-cpp//absl/base:nullability",
+        "@abseil-cpp//absl/container:flat_hash_map",
+        "@abseil-cpp//absl/memory",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:status_macros",
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/strings",
+        "@abseil-cpp//absl/strings:string_view",
+        "@abseil-cpp//absl/time",
+    ],
+    alwayslink = 1,
+)
+
+cc_test(
+    name = "min_cost_flow_solver_test",
+    srcs = ["min_cost_flow_solver_test.cc"],
+    copts = ORTOOLS_TEST_COPTS,
+    linkopts = ORTOOLS_DEFAULT_LINKOPTS,
+    tags = [
+        "no_test_wasm",
+        "noci",
+    ],
+    deps = [
+        ":glop_solver",
+        ":min_cost_flow_solver",
+        "//ortools/base:gmock",
+        "//ortools/base:gmock_main",
+        "//ortools/base:types",
+        "//ortools/graph:min_cost_flow",
+        "//ortools/math_opt/cpp:matchers",
+        "//ortools/math_opt/cpp:math_opt",
+        "//ortools/math_opt/solver_tests:callback_tests",
+        "//ortools/math_opt/solver_tests:generic_tests",
+        "//ortools/math_opt/solver_tests:invalid_input_tests",
+        "//ortools/math_opt/solver_tests:logical_constraint_tests",
+        "//ortools/math_opt/solver_tests:min_cost_flow_tests",
+        "//ortools/math_opt/solver_tests:test_models",
+        "//ortools/math_opt/testing:param_name",
+        "@abseil-cpp//absl/base:core_headers",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/strings",
+        "@abseil-cpp//absl/strings:string_view",
+        "@abseil-cpp//absl/time",
+    ],
+)
+
+cc_test(
+    name = "glpk_solver_test",
+    srcs = ["glpk_solver_test.cc"],
+    copts = ORTOOLS_TEST_COPTS,
+    linkopts = ORTOOLS_DEFAULT_LINKOPTS,
+    tags = [
+        # GLPK does not build on darwin_x86_64 with duplicated DEBUG macro
+        # issue.
+        "no_test_darwin_x86_64",
+        # TODO(b/240593929): we should test wasm
+        "no_test_wasm",
+    ],
+    target_compatible_with = select({
+        "//ortools/linear_solver:use_glpk": [],
+        "//conditions:default": ["@platforms//:incompatible"],
+    }),
+    deps = [
+        ":glpk_solver",
+        "//ortools/base:gmock_main",
+        "//ortools/math_opt/core:solver",
+        "//ortools/math_opt/cpp:matchers",
+        "//ortools/math_opt/cpp:math_opt",
+        "//ortools/math_opt/solver_tests:callback_tests",
+        "//ortools/math_opt/solver_tests:generic_tests",
+        "//ortools/math_opt/solver_tests:infeasible_subsystem_tests",
+        "//ortools/math_opt/solver_tests:invalid_input_tests",
+        "//ortools/math_opt/solver_tests:ip_model_solve_parameters_tests",
+        "//ortools/math_opt/solver_tests:ip_parameter_tests",
+        "//ortools/math_opt/solver_tests:logical_constraint_tests",
+        "//ortools/math_opt/solver_tests:lp_incomplete_solve_tests",
+        "//ortools/math_opt/solver_tests:lp_model_solve_parameters_tests",
+        "//ortools/math_opt/solver_tests:lp_parameter_tests",
+        "//ortools/math_opt/solver_tests:lp_tests",
+        "//ortools/math_opt/solver_tests:min_cost_flow_tests",
+        "//ortools/math_opt/solver_tests:mip_tests",
+        "//ortools/math_opt/solver_tests:multi_objective_tests",
+        "//ortools/math_opt/solver_tests:qc_tests",
+        "//ortools/math_opt/solver_tests:qp_tests",
+        "//ortools/math_opt/solver_tests:second_order_cone_tests",
+        "//ortools/math_opt/solver_tests:status_tests",
+        "//ortools/math_opt/solver_tests:test_models",
+        "//ortools/math_opt/testing:param_name",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/time",
+    ],
+)
+
+proto_library(
+    name = "osqp_proto",
+    srcs = ["osqp.proto"],
+)
+
+java_proto_library(
+    name = "osqp_java_proto",
+    deps = [":osqp_proto"],
+)
+
+cc_proto_library(
+    name = "osqp_cc_proto",
+    deps = [":osqp_proto"],
+)
+
+py_proto_library(
+    name = "osqp_py_pb2",
+    deps = [":osqp_proto"],
+)
+
+# generally do not recommend Highs, and if it is used, we would recommend using a subprocess solver.
+cc_library(
+    name = "highs_solver",
+    srcs = [
+        "highs_solver.cc",
+        "highs_solver.h",
+    ],
+    copts = ORTOOLS_DEFAULT_COPTS,
+    linkopts = ORTOOLS_DEFAULT_LINKOPTS,
+    # Highs does not compile on WASM.
+    tags = ["no_test_wasm"],
+    deps = [
+        ":highs_cc_proto",
+        ":message_callback_data",
+        "//ortools/base:protoutil",
+        "//ortools/base:status_builder",
+        "//ortools/base:types",
+        "//ortools/math_opt:callback_cc_proto",
+        "//ortools/math_opt:infeasible_subsystem_cc_proto",
+        "//ortools/math_opt:model_cc_proto",
+        "//ortools/math_opt:model_parameters_cc_proto",
+        "//ortools/math_opt:model_update_cc_proto",
+        "//ortools/math_opt:parameters_cc_proto",
+        "//ortools/math_opt:result_cc_proto",
+        "//ortools/math_opt:solution_cc_proto",
+        "//ortools/math_opt:sparse_containers_cc_proto",
+        "//ortools/math_opt/core:empty_bounds",
+        "//ortools/math_opt/core:inverted_bounds",
+        "//ortools/math_opt/core:math_opt_proto_utils",
+        "//ortools/math_opt/core:solver_interface",
+        "//ortools/math_opt/core:sorted",
+        "//ortools/math_opt/core:sparse_vector_view",
+        "//ortools/util:solve_interrupter",
+        "//ortools/util:status_macros",
+        "@abseil-cpp//absl/algorithm:container",
+        "@abseil-cpp//absl/base:nullability",
+        "@abseil-cpp//absl/cleanup",
+        "@abseil-cpp//absl/container:flat_hash_map",
+        "@abseil-cpp//absl/log:check",
+        "@abseil-cpp//absl/memory",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:status_macros",
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/strings:string_view",
+        "@abseil-cpp//absl/time",
+        "@highs",
+    ],
+    alwayslink = 1,
+)
+
+cc_test(
+    name = "highs_solver_test",
+    srcs = ["highs_solver_test.cc"],
+    copts = ORTOOLS_TEST_COPTS,
+    flaky = 1,
+    linkopts = ORTOOLS_DEFAULT_LINKOPTS,
+    # Highs fails to build with WASM in //third_party/zstr.
+    tags = [
+        "no_test_wasm",
+        "noci",
+    ],
+    deps = [
+        ":highs_cc_proto",
+        ":highs_solver",
+        "//ortools/base:gmock_main",
+        "//ortools/base:types",
+        "//ortools/math_opt/cpp:matchers",
+        "//ortools/math_opt/cpp:math_opt",
+        "//ortools/math_opt/solver_tests:callback_tests",
+        "//ortools/math_opt/solver_tests:generic_tests",
+        "//ortools/math_opt/solver_tests:infeasible_subsystem_tests",
+        "//ortools/math_opt/solver_tests:ip_model_solve_parameters_tests",
+        "//ortools/math_opt/solver_tests:ip_parameter_tests",
+        "//ortools/math_opt/solver_tests:lp_model_solve_parameters_tests",
+        "//ortools/math_opt/solver_tests:lp_parameter_tests",
+        "//ortools/math_opt/solver_tests:lp_tests",
+        "//ortools/math_opt/solver_tests:min_cost_flow_tests",
+        "//ortools/math_opt/solver_tests:mip_tests",
+        "//ortools/math_opt/solver_tests:multi_objective_tests",
+        "//ortools/math_opt/solver_tests:status_tests",
+        "//ortools/math_opt/solver_tests:test_models",
+        "//ortools/math_opt/testing:param_name",
+        "@abseil-cpp//absl/status",
+    ],
+)
+
+proto_library(
+    name = "gurobi_proto",
+    srcs = ["gurobi.proto"],
+)
+
+java_proto_library(
+    name = "gurobi_java_proto",
+    deps = [":gurobi_proto"],
+)
+
+cc_proto_library(
+    name = "gurobi_cc_proto",
+    deps = [":gurobi_proto"],
+)
+
+py_proto_library(
+    name = "gurobi_py_pb2",
+    deps = [":gurobi_proto"],
+)
+
+proto_library(
+    name = "glpk_proto",
+    srcs = ["glpk.proto"],
+)
+
+java_proto_library(
+    name = "glpk_java_proto",
+    deps = [":glpk_proto"],
+)
+
+cc_proto_library(
+    name = "glpk_cc_proto",
+    deps = [":glpk_proto"],
+)
+
+py_proto_library(
+    name = "glpk_py_pb2",
+    deps = [":glpk_proto"],
+)
+
+proto_library(
+    name = "highs_proto",
+    srcs = ["highs.proto"],
+)
+
+java_proto_library(
+    name = "highs_java_proto",
+    deps = [":highs_proto"],
+)
+
+cc_proto_library(
+    name = "highs_cc_proto",
+    deps = [":highs_proto"],
+)
+
+py_proto_library(
+    name = "highs_py_pb2",
+    deps = [":highs_proto"],
+)
+
+proto_library(
+    name = "xpress_proto",
+    srcs = ["xpress.proto"],
+)
+
+java_proto_library(
+    name = "xpress_java_proto",
+    deps = [":xpress_proto"],
+)
+
+cc_proto_library(
+    name = "xpress_cc_proto",
+    deps = [":xpress_proto"],
+)
+
+py_proto_library(
+    name = "xpress_py_pb2",
+    deps = [":xpress_proto"],
+)
+
+cc_library(
+    name = "xpress_solver",
+    srcs = [
+        "xpress_solver.cc",
+        "xpress_solver.h",
+    ],
+    copts = ORTOOLS_DEFAULT_COPTS,
+    linkopts = ORTOOLS_DEFAULT_LINKOPTS,
+    deps = [
+        "//ortools/base:map_util",
+        "//ortools/base:protoutil",
+        "//ortools/base:types",
+        "//ortools/math_opt:callback_cc_proto",
+        "//ortools/math_opt:infeasible_subsystem_cc_proto",
+        "//ortools/math_opt:model_cc_proto",
+        "//ortools/math_opt:model_parameters_cc_proto",
+        "//ortools/math_opt:model_update_cc_proto",
+        "//ortools/math_opt:parameters_cc_proto",
+        "//ortools/math_opt:result_cc_proto",
+        "//ortools/math_opt:solution_cc_proto",
+        "//ortools/math_opt:sparse_containers_cc_proto",
+        "//ortools/math_opt/core:inverted_bounds",
+        "//ortools/math_opt/core:math_opt_proto_utils",
+        "//ortools/math_opt/core:solver_interface",
+        "//ortools/math_opt/core:sparse_vector_view",
+        "//ortools/math_opt/solvers/xpress:g_xpress",
+        "//ortools/math_opt/validators:callback_validator",
+        "//ortools/third_party_solvers:xpress_environment",
+        "//ortools/util:solve_interrupter",
+        "@abseil-cpp//absl/base:config",
+        "@abseil-cpp//absl/base:core_headers",
+        "@abseil-cpp//absl/base:nullability",
+        "@abseil-cpp//absl/container:flat_hash_set",
+        "@abseil-cpp//absl/container:linked_hash_map",
+        "@abseil-cpp//absl/log",
+        "@abseil-cpp//absl/log:check",
+        "@abseil-cpp//absl/memory",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:status_macros",
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/strings",
+        "@abseil-cpp//absl/synchronization",
+        "@abseil-cpp//absl/time",
+        "@abseil-cpp//absl/types:span",
+        "@protobuf",
+    ],
+    alwayslink = 1,
+)
+
+cc_test(
+    name = "xpress_solver_test",
+    srcs = ["xpress_solver_test.cc"],
+    copts = ORTOOLS_TEST_COPTS,
+    linkopts = ORTOOLS_DEFAULT_LINKOPTS,
+    deps = [
+        ":xpress_solver",
+        "//ortools/base:gmock",  # Not gunit_main: we have a custom main().
+        "//ortools/math_opt/cpp:math_opt",
+        "//ortools/math_opt/solver_tests:callback_tests",
+        "//ortools/math_opt/solver_tests:generic_tests",
+        "//ortools/math_opt/solver_tests:infeasible_subsystem_tests",
+        "//ortools/math_opt/solver_tests:invalid_input_tests",
+        "//ortools/math_opt/solver_tests:ip_model_solve_parameters_tests",
+        "//ortools/math_opt/solver_tests:logical_constraint_tests",
+        "//ortools/math_opt/solver_tests:lp_incomplete_solve_tests",
+        "//ortools/math_opt/solver_tests:lp_model_solve_parameters_tests",
+        "//ortools/math_opt/solver_tests:lp_parameter_tests",
+        "//ortools/math_opt/solver_tests:lp_tests",
+        "//ortools/math_opt/solver_tests:mip_tests",
+        "//ortools/math_opt/solver_tests:multi_objective_tests",
+        "//ortools/math_opt/solver_tests:qc_tests",
+        "//ortools/math_opt/solver_tests:qp_tests",
+        "//ortools/math_opt/solver_tests:second_order_cone_tests",
+        "//ortools/math_opt/solver_tests:status_tests",
+        "//ortools/math_opt/solver_tests:test_models",
+        "//ortools/third_party_solvers:xpress_environment",
+        "@abseil-cpp//absl/log",
+    ],
+)

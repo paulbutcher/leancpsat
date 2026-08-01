@@ -1,0 +1,83 @@
+# Copyright 2010-2025 Google LLC
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+file(GLOB _SRCS "*.h" "*.cc")
+list(FILTER _SRCS EXCLUDE REGEX ".*/.*_benchmark.cc")
+list(FILTER _SRCS EXCLUDE REGEX ".*/.*_test.cc")
+list(FILTER _SRCS EXCLUDE REGEX ".*/set_cover_solve.cc")
+
+set(NAME ${PROJECT_NAME}_algorithms)
+
+# Will be merge in libortools.so
+#add_library(${NAME} STATIC ${_SRCS})
+add_library(${NAME} OBJECT ${_SRCS})
+set_target_properties(${NAME} PROPERTIES
+  POSITION_INDEPENDENT_CODE ON
+  )
+target_include_directories(${NAME} PRIVATE
+  ${PROJECT_SOURCE_DIR}
+  ${PROJECT_BINARY_DIR})
+target_link_libraries(${NAME} PRIVATE
+  absl::memory
+  absl::str_format
+  protobuf::libprotobuf
+  ${PROJECT_NAMESPACE}::ortools_proto)
+#add_library(${PROJECT_NAMESPACE}::algorithms ALIAS ${NAME})
+
+if(BUILD_CXX_TESTING)
+  # Test
+  file(GLOB _TEST_SRCS "*_test.cc")
+  list(FILTER _TEST_SRCS EXCLUDE REGEX ".*_stress_test.cc")
+  list(FILTER _TEST_SRCS EXCLUDE REGEX ".*/n_choose_k_test.cc")
+  foreach(_FULL_FILE_NAME IN LISTS _TEST_SRCS)
+    get_filename_component(_NAME ${_FULL_FILE_NAME} NAME_WE)
+    get_filename_component(_FILE_NAME ${_FULL_FILE_NAME} NAME)
+    ortools_cxx_test(
+      NAME
+        algorithms_${_NAME}
+      SOURCES
+        ${_FILE_NAME}
+      LINK_LIBRARIES
+        benchmark::benchmark
+        GTest::gtest
+        GTest::gtest_main
+        GTest::gmock
+    )
+  endforeach()
+  # These tests are too long so we disable them.
+  set_tests_properties(
+    cxx_algorithms_radix_sort_test
+    PROPERTIES DISABLED TRUE)
+  # Benchmark
+  file(GLOB _BENCHMARK_SRCS "*_benchmark.cc")
+  set(_ARGS "")
+  if(NOT RUN_BENCHMARKS)
+    set(_ARGS "DISABLED")
+  endif()
+  foreach(_FULL_FILE_NAME IN LISTS _BENCHMARK_SRCS)
+    get_filename_component(_NAME ${_FULL_FILE_NAME} NAME_WE)
+    get_filename_component(_FILE_NAME ${_FULL_FILE_NAME} NAME)
+    ortools_cxx_test(
+      NAME
+        algorithms_${_NAME}
+      SOURCES
+        ${_FILE_NAME}
+      LINK_LIBRARIES
+        benchmark::benchmark
+        ortools_benchmark_main
+        GTest::gtest
+        GTest::gmock
+      ${_ARGS}
+    )
+  endforeach()
+endif()

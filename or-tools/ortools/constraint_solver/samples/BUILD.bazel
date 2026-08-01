@@ -1,0 +1,140 @@
+# Copyright 2010-2025 Google LLC
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+load("@rules_cc//cc:cc_test.bzl", "cc_test")
+load("@rules_python//python:py_test.bzl", "py_test")
+load("//ortools/copts:configure_copts.bzl", "ORTOOLS_DEFAULT_LINKOPTS", "ORTOOLS_TEST_COPTS")
+
+cc_test(
+    name = "cp_is_fun_cp_test",
+    srcs = ["cp_is_fun_cp.cc"],
+    copts = ORTOOLS_TEST_COPTS,
+    linkopts = ORTOOLS_DEFAULT_LINKOPTS,
+    deps = [
+        "//ortools/base",
+        "//ortools/base:log_severity",
+        "//ortools/constraint_solver:cp",
+        "@abseil-cpp//absl/log",
+        "@abseil-cpp//absl/log:check",
+        "@abseil-cpp//absl/log:globals",
+    ],
+)
+
+py_test(
+    name = "cp_is_fun_cp_py3",
+    srcs = ["cp_is_fun_cp.py"],
+    main = "cp_is_fun_cp.py",
+    deps = ["//ortools/constraint_solver/python:constraint_solver_py"],
+)
+
+cc_test(
+    name = "minimal_jobshop_cp_test",
+    srcs = ["minimal_jobshop_cp.cc"],
+    copts = ORTOOLS_TEST_COPTS,
+    linkopts = ORTOOLS_DEFAULT_LINKOPTS,
+    deps = [
+        "//ortools/base",
+        "//ortools/base:log_severity",
+        "//ortools/constraint_solver:cp",
+        "@abseil-cpp//absl/log",
+        "@abseil-cpp//absl/log:globals",
+    ],
+)
+
+cc_test(
+    name = "nqueens_cp_test",
+    srcs = ["nqueens_cp.cc"],
+    copts = ORTOOLS_TEST_COPTS,
+    linkopts = ORTOOLS_DEFAULT_LINKOPTS,
+    deps = [
+        "//ortools/base",
+        "//ortools/base:log_severity",
+        "//ortools/base:strtoint",
+        "//ortools/constraint_solver:cp",
+        "@abseil-cpp//absl/log",
+        "@abseil-cpp//absl/log:check",
+        "@abseil-cpp//absl/log:globals",
+        "@abseil-cpp//absl/strings",
+    ],
+)
+
+py_test(
+    name = "nqueens_cp_py3",
+    srcs = ["nqueens_cp.py"],
+    main = "nqueens_cp.py",
+    deps = ["//ortools/constraint_solver/python:constraint_solver_py"],
+)
+
+cc_test(
+    name = "nurses_cp_test",
+    srcs = ["nurses_cp.cc"],
+    copts = ORTOOLS_TEST_COPTS,
+    linkopts = ORTOOLS_DEFAULT_LINKOPTS,
+    deps = [
+        "//ortools/base",
+        "//ortools/base:log_severity",
+        "//ortools/constraint_solver:cp",
+        "@abseil-cpp//absl/log",
+        "@abseil-cpp//absl/log:globals",
+    ],
+)
+
+cc_test(
+    name = "rabbits_and_pheasants_cp_test",
+    srcs = ["rabbits_and_pheasants_cp.cc"],
+    copts = ORTOOLS_TEST_COPTS,
+    linkopts = ORTOOLS_DEFAULT_LINKOPTS,
+    deps = [
+        "//ortools/base",
+        "//ortools/base:log_severity",
+        "//ortools/constraint_solver:cp",
+        "@abseil-cpp//absl/log",
+        "@abseil-cpp//absl/log:globals",
+    ],
+)
+
+cc_test(
+    name = "simple_cp_program_test",
+    srcs = ["simple_cp_program.cc"],
+    copts = ORTOOLS_TEST_COPTS,
+    linkopts = ORTOOLS_DEFAULT_LINKOPTS,
+    deps = [
+        "//ortools/base",
+        "//ortools/base:log_severity",
+        "//ortools/constraint_solver:cp",
+        "@abseil-cpp//absl/log",
+        "@abseil-cpp//absl/log:globals",
+    ],
+)
+
+py_test(
+    name = "simple_cp_program_py3",
+    srcs = ["simple_cp_program.py"],
+    main = "simple_cp_program.py",
+    deps = ["//ortools/constraint_solver/python:constraint_solver_py"],
+)
+
+cc_test(
+    name = "simple_ls_program_test",
+    srcs = ["simple_ls_program.cc"],
+    copts = ORTOOLS_TEST_COPTS,
+    linkopts = ORTOOLS_DEFAULT_LINKOPTS,
+    deps = [
+        "//ortools/base",
+        "//ortools/base:log_severity",
+        "//ortools/constraint_solver:cp",
+        "@abseil-cpp//absl/log",
+        "@abseil-cpp//absl/log:check",
+        "@abseil-cpp//absl/log:globals",
+    ],
+)

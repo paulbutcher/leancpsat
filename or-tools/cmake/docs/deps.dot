@@ -1,0 +1,227 @@
+@startdot
+digraph CMakeDeps {
+  rankdir=BT;
+  //rankdir=TD;
+  node [shape=box, style="rounded,filled", color=royalblue, fillcolor=royalblue];
+
+  subgraph clusterZLIB {
+    ZLIB [label="ZLIB::ZLIB"];
+
+    color=royalblue;
+    label = "madler/zlib.git + cmake patch";
+  }
+
+  subgraph clusterBZip2 {
+    BZip2 [label="BZip2::BZip2"];
+
+    color=royalblue;
+    label = "bzip2/bzip2.git + cmake patch";
+  }
+
+  subgraph clusterAbsl {
+    Absl [label="absl::absl_*"];
+
+    color=royalblue;
+    label = "abseil/abseil-cpp.git";
+  }
+
+  subgraph clusterProtobuf {
+    Protobuf [label="protobuf::libprotobuf"];
+    Protoc [label="protobuf::protoc", shape=component];
+
+    color=royalblue;
+    label = "protocolbuffers/protobuf.git";
+  }
+
+  subgraph clusterRe2 {
+    Re2 [label="re2::re2"];
+
+    color=royalblue;
+    label = "google/re2.git";
+  }
+
+  subgraph clusterEigen3 {
+    Eigen3 [label="Eigen3::eigen"];
+
+    color=royalblue;
+    label = "libeigen/eigen.git";
+  }
+
+  subgraph clusterCoinOR {
+    subgraph clusterCoinUtils {
+      CoinUtils [label="Coin::CoinUtils"];
+
+      color=royalblue;
+      label = "Mizux/CoinUtils.git";
+    }
+    subgraph clusterOsi {
+      Osi [label="Coin::Osi"];
+
+      color=royalblue;
+      label = "Mizux/Osi.git";
+    }
+    subgraph clusterClp {
+      Clp [label="Coin::Clp"];
+      OsiClp [label="Coin::OsiClp"];
+      ClpSolver [label="Coin::ClpSolver"];
+
+      color=royalblue;
+      label = "Mizux/Clp.git";
+    }
+    subgraph clusterCgl {
+      Cgl [label="Coin::Cgl"];
+
+      color=royalblue;
+      label = "Mizux/Cgl.git";
+    }
+    subgraph clusterCbc {
+      Cbc [label="Coin::Cbc"];
+      OsiCbc [label="Coin::OsiCbc"];
+      CbcSolver [label="Coin::CbcSolver"];
+
+      color=royalblue;
+      label = "Mizux/Cbc.git";
+    }
+
+    Osi -> CoinUtils;
+
+    Clp -> CoinUtils;
+    Clp -> Osi;
+
+    OsiClp -> CoinUtils;
+    OsiClp -> Osi;
+    OsiClp -> Clp;
+
+    ClpSolver -> Clp;
+
+    Cgl -> CoinUtils;
+    Cgl -> Osi;
+    Cgl -> OsiClp;
+
+    Cbc -> CoinUtils;
+    Cbc -> Osi;
+    Cbc -> Clp;
+    Cbc -> Cgl;
+
+    OsiCbc -> CoinUtils;
+    OsiCbc -> Osi;
+    OsiCbc -> Cbc;
+
+    CbcSolver -> Cbc;
+    color=royalblue;
+    label = "-DUSE_COINOR=ON AND -DBUILD_DEPS=ON";
+  }
+
+  subgraph clusterGLPKSolver {
+    subgraph clusterGLPK {
+      GLPK [label="glpk::glpk"];
+
+      color=royalblue;
+      label = "Mizux/GLPK.git";
+    }
+    color=royalblue;
+    label = "-DUSE_GLPK=ON AND -DBUILD_GLPK=ON";
+  }
+
+  subgraph clusterHIGHSSolver {
+    subgraph clusterHIGHS {
+      HIGHS [label="highs::highs"];
+
+      color=royalblue;
+      label = "ERGO-Code/HIGHS.git";
+    }
+    color=royalblue;
+    label = "-DUSE_HIGHS=ON AND -DBUILD_HIGHS=ON";
+  }
+
+  subgraph clusterSCIPSolver {
+    subgraph clusterSoplex {
+      SPX [label="libsoplex"];
+
+      color=royalblue;
+      label = "scipopt/soplex.git";
+    }
+    subgraph clusterSCIP {
+      SCIP [label="SCIP::libscip"];
+
+      color=royalblue;
+      label = "scipopt/scip.git";
+    }
+    SCIP -> SPX;
+
+    color=royalblue;
+    label = "-DUSE_SCIP=ON AND -DBUILD_SCIP=ON";
+  }
+
+  // Testing
+  subgraph clusterTesting {
+    subgraph clusterGTest {
+      gtest [label="GTest::gtest"];
+
+      color=royalblue;
+      label = "google/googletest.git";
+    }
+    subgraph clusterBenchmark {
+      bench [label="benchmark::benchmark"];
+
+      color=royalblue;
+      label = "google/benchmark.git";
+    }
+    subgraph clusterFuzzTest {
+      fuzz [label="fuzztest::fuzztest"];
+
+      color=royalblue;
+      label = "google/fuzztest.git";
+    }
+    fuzz -> gtest;
+    bench -> gtest;
+
+    color=royalblue;
+    label = "-DBUILD_TESTING=ON";
+  }
+
+  // Python
+  subgraph clusterPython {
+    subgraph clusterPybind11 {
+      Pybind11 [label="pybind11::pybind11"];
+
+      color=gold;
+      label = "pybind/pybind11.git";
+    }
+    subgraph clusterPybind11Absl {
+      Pybind11Absl [label="pybind11::pybind11_abseil"];
+
+      color=gold;
+      label = "pybind/pybind11_abseil.git";
+    }
+    subgraph clusterPybind11Protobuf {
+      Pybind11Protobuf [label="pybind11::pybind11_protobuf"];
+
+      color=gold;
+      label = "pybind/pybind11_protobuf.git";
+    }
+    Pybind11Absl -> Pybind11;
+    Pybind11Protobuf -> Pybind11;
+
+    color=gold;
+    label = "-DBUILD_PYTHON=ON";
+  }
+
+  // inter deps
+  Protobuf -> ZLIB;
+  Cbc -> ZLIB;
+  SPX -> ZLIB;
+  SCIP -> ZLIB;
+  Re2 -> Absl;
+  Protobuf -> Absl;
+  gtest -> Absl;
+  fuzz -> Absl;
+  Pybind11Absl -> Absl;
+  fuzz -> Protobuf;
+  Pybind11Protobuf -> Protobuf;
+  Protobuf -> Re2;
+  gtest -> Re2;
+  fuzz -> Re2;
+}
+@enddot
+# vim tw:0

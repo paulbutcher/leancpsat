@@ -1,0 +1,14 @@
+build
+build_make
+build_dotnet
+build_java
+build_python
+build_all
+install_make
+build_cross
+dependencies/install
+dependencies/sources
+temp_cpp
+temp_dotnet
+temp_java
+temp_python

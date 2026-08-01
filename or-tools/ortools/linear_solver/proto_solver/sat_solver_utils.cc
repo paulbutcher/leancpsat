@@ -1,0 +1,139 @@
+// Copyright 2010-2025 Google LLC
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+#include "ortools/linear_solver/proto_solver/sat_solver_utils.h"
+
+#include <memory>
+#include <string>
+#include <utility>
+#include <vector>
+
+#include "absl/log/check.h"
+#include "ortools/glop/parameters.pb.h"
+#include "ortools/glop/preprocessor.h"
+#include "ortools/linear_solver/linear_solver.pb.h"
+#include "ortools/linear_solver/proto_solver/preprocessor.h"
+#include "ortools/lp_data/lp_data.h"
+#include "ortools/lp_data/lp_types.h"
+#include "ortools/lp_data/proto_utils.h"
+#include "ortools/util/logging.h"
+#include "ortools/util/time_limit.h"
+
+namespace operations_research {
+
+#define ADD_LP_PREPROCESSOR(name, ...) \
+  names.push_back(#name);              \
+  lp_preprocessors.push_back(          \
+      std::make_unique<name>(&glop_params __VA_OPT__(, ) __VA_ARGS__));
+
+glop::ProblemStatus ApplyMipPresolveSteps(
+    const glop::GlopParameters& glop_params, MPModelProto* model,
+    std::vector<std::unique_ptr<glop::Preprocessor>>* for_postsolve,
+    SolverLogger* logger) {
+  CHECK(model != nullptr);
+
+  // TODO(user): General constraints are currently not supported.
+  if (!model->general_constraint().empty()) {
+    return glop::ProblemStatus::INIT;
+  }
+
+  // We need to copy the hint because LinearProgramToMPModelProto() loose it.
+  const bool hint_is_present = model->has_solution_hint();
+  const auto copy_of_hint = model->solution_hint();
+
+  std::unique_ptr<TimeLimit> time_limit =
+      TimeLimit::FromParameters(glop_params);
+
+  // TODO(user): Remove this back and forth conversion. We could convert
+  // the LinearProgram directly to a CpModelProto, or we could have a custom
+  // implementation of these presolve steps.
+  glop::LinearProgram lp;
+  glop::MPModelProtoToLinearProgram(*model, &lp);
+
+  // These presolve might change the problem size.
+  //
+  // TODO(user): transform the hint instead of disabling presolve.
+  std::vector<std::string> names;
+  std::vector<std::unique_ptr<glop::Preprocessor>> lp_preprocessors;
+  const std::string header =
+      "Running basic LP presolve, initial problem dimensions: ";
+  if (!hint_is_present) {
+    SOLVER_LOG(logger, "");
+    SOLVER_LOG(logger, header, lp.GetDimensionString());
+    ADD_LP_PREPROCESSOR(glop::FixedVariablePreprocessor);
+    ADD_LP_PREPROCESSOR(glop::SingletonPreprocessor);
+    ADD_LP_PREPROCESSOR(glop::ForcingAndImpliedFreeConstraintPreprocessor);
+    ADD_LP_PREPROCESSOR(glop::FreeConstraintPreprocessor);
+
+    // TODO(user): Usually it is good to run the ImpliedFreePreprocessor before
+    // this one. However this seems to cause problem on atm20-100.mps. Moreover,
+    // for the conversion, it is better to have tight bounds even if the bound
+    // propagator is supposed to undo what this presolve would have done.
+    ADD_LP_PREPROCESSOR(glop::UnconstrainedVariablePreprocessor);
+  }
+
+  // These preprocessors do not need postsolve.
+  ADD_LP_PREPROCESSOR(IntegerBoundsPreprocessor, 1e-6);
+  ADD_LP_PREPROCESSOR(BoundPropagationPreprocessor, 1e-6);
+  ADD_LP_PREPROCESSOR(ImpliedIntegerPreprocessor, 1e-6);
+
+  // We need to re-run this after the ImpliedIntegerPreprocessor because the
+  // latter does not round the bounds of the constraints involving only
+  // integer variables and coefficients.
+  ADD_LP_PREPROCESSOR(IntegerBoundsPreprocessor, 1e-6);
+  ADD_LP_PREPROCESSOR(ReduceCostOverExclusiveOrConstraintPreprocessor);
+
+  for (int i = 0; i < lp_preprocessors.size(); ++i) {
+    if (time_limit->LimitReached()) break;
+    auto& preprocessor = lp_preprocessors[i];
+    preprocessor->SetTimeLimit(time_limit.get());
+    preprocessor->UseInMipContext();
+    const glop::Preprocessor::Result result = preprocessor->Run(&lp);
+    names[i].resize(header.size(), ' ');  // padding.
+    SOLVER_LOG(logger, names[i], lp.GetDimensionString());
+    if (result.solve_status.has_value()) {
+      return result.solve_status->problem_status();
+    }
+    if (result.postsolve_is_needed) {
+      for_postsolve->push_back(std::move(preprocessor));
+    }
+  }
+
+  // Finally, we make sure all domains contain zero.
+  if (!hint_is_present) {
+    auto shift_bounds =
+        std::make_unique<glop::ShiftVariableBoundsPreprocessor>(&glop_params);
+    shift_bounds->UseInMipContext();
+    const glop::Preprocessor::Result result = shift_bounds->Run(&lp);
+    if (result.solve_status.has_value()) {
+      return result.solve_status->problem_status();
+    }
+    if (result.postsolve_is_needed) {
+      for_postsolve->push_back(std::move(shift_bounds));
+    }
+  }
+
+  glop::LinearProgramToMPModelProto(lp, model);
+
+  // Restore the hint, note that none of the presolve steps we run here change
+  // the number of variables in the model.
+  if (hint_is_present) {
+    *model->mutable_solution_hint() = copy_of_hint;
+  }
+
+  return glop::ProblemStatus::INIT;
+}
+
+#undef ADD_LP_PREPROCESSOR
+
+}  // namespace operations_research

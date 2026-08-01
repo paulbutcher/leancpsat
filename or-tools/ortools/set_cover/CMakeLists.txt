@@ -1,0 +1,88 @@
+# Copyright 2010-2025 Google LLC
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+file(GLOB _SRCS "*.h" "*.cc")
+list(FILTER _SRCS EXCLUDE REGEX ".*/.*_benchmark.cc")
+list(FILTER _SRCS EXCLUDE REGEX ".*/.*_test.cc")
+list(FILTER _SRCS EXCLUDE REGEX ".*/set_cover_solve.cc")
+list(FILTER _SRCS EXCLUDE REGEX ".*/set_cover_mip.*")
+list(FILTER _SRCS EXCLUDE REGEX ".*/reporting.*")
+
+set(NAME ${PROJECT_NAME}_set_cover)
+
+# Will be merge in libortools.so
+#add_library(${NAME} STATIC ${_SRCS})
+add_library(${NAME} OBJECT ${_SRCS})
+set_target_properties(${NAME} PROPERTIES
+  POSITION_INDEPENDENT_CODE ON
+  )
+target_include_directories(${NAME} PRIVATE
+  ${PROJECT_SOURCE_DIR}
+  ${PROJECT_BINARY_DIR})
+target_link_libraries(${NAME} PRIVATE
+  protobuf::libprotobuf
+  ${PROJECT_NAMESPACE}::ortools_proto)
+#add_library(${PROJECT_NAMESPACE}::set_cover ALIAS ${NAME})
+
+if(BUILD_CXX_TESTING)
+  file(GLOB _TEST_SRCS "*_test.cc")
+  list(FILTER _TEST_SRCS EXCLUDE REGEX ".*/set_cover_cft_test.cc") # need input file
+  list(FILTER _TEST_SRCS EXCLUDE REGEX ".*/knights_test.cc") # timeout
+  if(NOT USE_SCIP)
+    list(FILTER _TEST_SRCS EXCLUDE REGEX ".*/set_cover_test.cc")
+  endif()
+  foreach(_FULL_FILE_NAME IN LISTS _TEST_SRCS)
+    get_filename_component(_NAME ${_FULL_FILE_NAME} NAME_WE)
+    get_filename_component(_FILE_NAME ${_FULL_FILE_NAME} NAME)
+    ortools_cxx_test(
+      NAME
+        set_cover_${_NAME}
+      SOURCES
+        ${_FILE_NAME}
+      LINK_LIBRARIES
+        benchmark::benchmark
+        GTest::gtest
+        GTest::gtest_main
+        GTest::gmock
+        ortools::ortools_math_opt
+    )
+  endforeach()
+  if(TARGET set_cover_set_cover_test)
+    target_sources(set_cover_set_cover_test PRIVATE
+      "set_cover_mip.h"
+      "set_cover_mip.cc"
+    )
+  endif()
+  # Benchmark
+  file(GLOB _BENCHMARK_SRCS "*_benchmark.cc")
+  set(_ARGS "")
+  if(NOT RUN_BENCHMARKS)
+    set(_ARGS "DISABLED")
+  endif()
+  foreach(_FULL_FILE_NAME IN LISTS _BENCHMARK_SRCS)
+    get_filename_component(_NAME ${_FULL_FILE_NAME} NAME_WE)
+    get_filename_component(_FILE_NAME ${_FULL_FILE_NAME} NAME)
+    ortools_cxx_test(
+      NAME
+        set_cover_${_NAME}
+      SOURCES
+        ${_FILE_NAME}
+      LINK_LIBRARIES
+        benchmark::benchmark
+        ortools_benchmark_main
+        GTest::gtest
+        GTest::gmock
+      ${_ARGS}
+    )
+  endforeach()
+endif()
