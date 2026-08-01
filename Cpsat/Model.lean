@@ -99,6 +99,7 @@ inductive ConstraintKind where
   | atMostOne (lits : Array BoolVar)
   | exactlyOne (lits : Array BoolVar)
   | linMax (target : LinearExpr) (exprs : Array LinearExpr)
+  | element (index : LinearExpr) (exprs : Array LinearExpr) (target : LinearExpr)
 deriving Repr, Inhabited
 
 structure ConstraintData where
@@ -180,6 +181,13 @@ def addMaxEquality (target : LinearExpr) (exprs : Array LinearExpr) : CpModelM C
 expression (`cp_model.cc`), and this mirrors that exactly. -/
 def addMinEquality (target : LinearExpr) (exprs : Array LinearExpr) : CpModelM Constraint :=
   addMaxEquality (-target) (exprs.map (-·))
+
+/-- `exprs[index] == target`. `exprs` entries can be arbitrary linear
+expressions, not just variables, so a constant array of values (the "array of
+int64 values" C++ overload) is just `exprs.map .const`. -/
+def addElement (index : LinearExpr) (exprs : Array LinearExpr) (target : LinearExpr) :
+    CpModelM Constraint :=
+  addConstraint (.element index exprs target)
 
 /-- `a → b`, encoded as `¬a ∨ b`. -/
 def addImplication (a b : BoolVar) : CpModelM Constraint :=

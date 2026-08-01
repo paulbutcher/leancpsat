@@ -93,6 +93,34 @@ extern_lib cpsatShim pkg := do
   let oJob ← buildO oFile srcJob weakArgs (compiler := "c++")
   buildStaticLib (pkg.buildDir / "native" / "libcpsat_shim.a") #[oJob]
 
+/--
+Compile-only check, never linked into anything: cross-checks the field
+numbers hand-declared in `Cpsat/Proto.lean` against protoc's own generated
+constants in `cp_model.pb.h`/`sat_parameters.pb.h`. `@[default_target]` so it
+runs on every plain `lake build`, not just when something happens to link the
+shim (`cpsatShim` itself only gets built on demand, e.g. by `lake test`).
+
+Needs a much wider include path than `cpsatShim`: unlike `cp_solver_c.h` (pure
+C, no protobuf), `cp_model.pb.h` is protoc-generated C++ pulling in the
+in-tree protobuf/abseil headers OR-Tools built against - the exact flags CMake
+itself uses to compile `cp_model.pb.cc`, per `or-tools/build/compile_commands.json`.
+-/
+@[default_target]
+extern_lib cpsatFieldNumberCheck pkg := do
+  let srcJob ← inputTextFile <| pkg.dir / "native" / "cpsat_field_numbers_check.cpp"
+  let oFile := pkg.buildDir / "native" / "cpsat_field_numbers_check.o"
+  let deps := orToolsBuild / "_deps"
+  let weakArgs := #[
+    "-I", orToolsInclude.toString,
+    "-I", orToolsBuild.toString,
+    "-isystem", (deps / "protobuf-src" / "src").toString,
+    "-isystem", (deps / "absl-src").toString,
+    "-isystem", (deps / "protobuf-src" / "third_party" / "utf8_range").toString,
+    "-DOR_ORTOOLS_PROTO_DLL=", "-std=c++20", "-fPIC"
+  ]
+  let oJob ← buildO oFile srcJob weakArgs (compiler := "c++")
+  buildStaticLib (pkg.buildDir / "native" / "libcpsat_field_numbers_check.a") #[oJob]
+
 @[test_driver]
 lean_exe test where
   root := `Test.Main

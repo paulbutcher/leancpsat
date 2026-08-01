@@ -49,6 +49,15 @@ message LinearArgumentProto {
   repeated LinearExpressionProto exprs = 2;
 }
 
+-- Field numbers 1-3 (`index`/`target`/`vars`) are a legacy plain-int32 shape
+-- the real C++ builder no longer populates; only the `linear_*`/`exprs` shape
+-- it actually writes is declared here.
+message ElementConstraintProto {
+  LinearExpressionProto linear_index = 4;
+  LinearExpressionProto linear_target = 5;
+  repeated LinearExpressionProto exprs = 6;
+}
+
 oneof ConstraintKindProto {
   BoolArgumentProto bool_or = 3;
   BoolArgumentProto bool_and = 4;
@@ -56,6 +65,7 @@ oneof ConstraintKindProto {
   BoolArgumentProto exactly_one = 29;
   LinearConstraintProto linear = 12;
   AllDifferentConstraintProto all_diff = 13;
+  ElementConstraintProto element = 14;
   LinearArgumentProto lin_max = 27;
 }
 
@@ -146,6 +156,12 @@ private def constraintKindToProto : ConstraintKind → ConstraintKindProto
   | .exactlyOne lits => .exactly_one { literals := lits.map litRef }
   | .linMax target exprs =>
     .lin_max { target := linearExprToProto target, exprs := exprs.map linearExprToProto }
+  | .element index exprs target =>
+    .element {
+      linear_index := some (linearExprToProto index)
+      linear_target := some (linearExprToProto target)
+      exprs := exprs.map linearExprToProto
+    }
 
 private def constraintDataToProto (cd : ConstraintData) : ConstraintProto :=
   {

@@ -92,6 +92,17 @@ def testLinMax : IO Unit := do
   assertEq (resp.value maxVar) (7 : Int64) "linMax: expected max = 7"
   assertEq (resp.value minVar) (3 : Int64) "linMax: expected min = 3"
 
+/-- `target = exprs[index]` for a small fixed array of constant values. -/
+def testElement : IO Unit := do
+  let (target, resp) ← solve (m := do
+    let index ← newConstant 2
+    let target ← newIntVar (.ofInterval 0 100)
+    let exprs := #[10, 20, 30, 40].map (LinearExpr.const ·)
+    let _ ← addElement (.ofIntVar index) exprs (.ofIntVar target)
+    pure target)
+  assertEq resp.status .optimal "element: expected optimal"
+  assertEq (resp.value target) (30 : Int64) "element: expected exprs[2] = 30"
+
 /-- Infeasible model: `x <= 1` and `x >= 5` over a domain that admits both. -/
 def testInfeasible : IO Unit := do
   let (_, resp) ← solve (m := do
@@ -108,5 +119,6 @@ def main : IO Unit := do
   testAllDifferent
   testExactlyOne
   testLinMax
+  testElement
   testInfeasible
   IO.println "All tests passed."

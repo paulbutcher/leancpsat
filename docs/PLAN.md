@@ -60,7 +60,7 @@ task below only adds to `Cpsat.Proto`/`Cpsat.Model`, which don't exist yet until
   `cp_model.h`'s implementation, not just the declared signatures, before assuming this).
 - Test: three variables, known min/max, assert solver picks it correctly.
 
-**Task 2 - `element`.**
+**Task 2 - `element`. Done.**
 - Declare `ElementConstraintProto` in `Cpsat.Proto`.
 - `addElement (index : LinearExpr) (exprs : Array LinearExpr) (target : LinearExpr) : CpModelM Constraint`
   (covers the "array of expressions" overload; the "array of int64 values" and
