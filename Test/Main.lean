@@ -103,6 +103,28 @@ def testElement : IO Unit := do
   assertEq resp.status .optimal "element: expected optimal"
   assertEq (resp.value target) (30 : Int64) "element: expected exprs[2] = 30"
 
+/-- `target == numerator / denominator`, rounded towards zero. The negative
+numerator case pins down that rounding convention: `-10 / 3 = -3`, not the
+floor-division `-4`. -/
+def testDivision : IO Unit := do
+  let (target1, resp1) ← solve (m := do
+    let numerator ← newConstant 12
+    let denominator ← newConstant 5
+    let target ← newIntVar (.ofInterval (-20) 20)
+    let _ ← addDivisionEquality (.ofIntVar target) (.ofIntVar numerator) (.ofIntVar denominator)
+    pure target)
+  assertEq resp1.status .optimal "division: expected optimal (12 / 5)"
+  assertEq (resp1.value target1) (2 : Int64) "division: expected 12 / 5 = 2"
+
+  let (target2, resp2) ← solve (m := do
+    let numerator ← newConstant (-10)
+    let denominator ← newConstant 3
+    let target ← newIntVar (.ofInterval (-20) 20)
+    let _ ← addDivisionEquality (.ofIntVar target) (.ofIntVar numerator) (.ofIntVar denominator)
+    pure target)
+  assertEq resp2.status .optimal "division: expected optimal (-10 / 3)"
+  assertEq (resp2.value target2) (-3 : Int64) "division: expected -10 / 3 = -3 (rounds toward zero)"
+
 /-- Infeasible model: `x <= 1` and `x >= 5` over a domain that admits both. -/
 def testInfeasible : IO Unit := do
   let (_, resp) ← solve (m := do
@@ -120,5 +142,6 @@ def main : IO Unit := do
   testExactlyOne
   testLinMax
   testElement
+  testDivision
   testInfeasible
   IO.println "All tests passed."

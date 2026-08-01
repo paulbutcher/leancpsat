@@ -68,7 +68,7 @@ task below only adds to `Cpsat.Proto`/`Cpsat.Model`, which don't exist yet until
   wrappers over the same message once the core case works, not separate tasks).
 - Test: `target = exprs[index]` for a small fixed array.
 
-**Task 3 - `int_div`.**
+**Task 3 - `int_div`. Done.**
 - Reuses `LinearArgumentProto` (already declared in Task 1).
 - `addDivisionEquality (target numerator denominator : LinearExpr) : CpModelM Constraint`
 - Test: integer division with a known quotient, including a case with a negative

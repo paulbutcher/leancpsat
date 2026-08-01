@@ -39,6 +39,7 @@ static_assert(ConstraintProto::kNameFieldNumber == 1);
 static_assert(ConstraintProto::kEnforcementLiteralFieldNumber == 2);
 static_assert(ConstraintProto::kBoolOrFieldNumber == 3);
 static_assert(ConstraintProto::kBoolAndFieldNumber == 4);
+static_assert(ConstraintProto::kIntDivFieldNumber == 7);
 static_assert(ConstraintProto::kLinearFieldNumber == 12);
 static_assert(ConstraintProto::kAllDiffFieldNumber == 13);
 static_assert(ConstraintProto::kElementFieldNumber == 14);

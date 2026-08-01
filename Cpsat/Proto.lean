@@ -66,6 +66,7 @@ oneof ConstraintKindProto {
   LinearConstraintProto linear = 12;
   AllDifferentConstraintProto all_diff = 13;
   ElementConstraintProto element = 14;
+  LinearArgumentProto int_div = 7;
   LinearArgumentProto lin_max = 27;
 }
 
@@ -161,6 +162,11 @@ private def constraintKindToProto : ConstraintKind → ConstraintKindProto
       linear_index := some (linearExprToProto index)
       linear_target := some (linearExprToProto target)
       exprs := exprs.map linearExprToProto
+    }
+  | .intDiv target numerator denominator =>
+    .int_div {
+      target := some (linearExprToProto target)
+      exprs := #[linearExprToProto numerator, linearExprToProto denominator]
     }
 
 private def constraintDataToProto (cd : ConstraintData) : ConstraintProto :=

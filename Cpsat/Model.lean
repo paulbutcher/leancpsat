@@ -100,6 +100,7 @@ inductive ConstraintKind where
   | exactlyOne (lits : Array BoolVar)
   | linMax (target : LinearExpr) (exprs : Array LinearExpr)
   | element (index : LinearExpr) (exprs : Array LinearExpr) (target : LinearExpr)
+  | intDiv (target numerator denominator : LinearExpr)
 deriving Repr, Inhabited
 
 structure ConstraintData where
@@ -188,6 +189,12 @@ int64 values" C++ overload) is just `exprs.map .const`. -/
 def addElement (index : LinearExpr) (exprs : Array LinearExpr) (target : LinearExpr) :
     CpModelM Constraint :=
   addConstraint (.element index exprs target)
+
+/-- `target == numerator / denominator`, rounded towards zero (so
+`-3 = -10 / 3`, not `-4`). The model is invalid if `denominator`'s domain can
+be zero. -/
+def addDivisionEquality (target numerator denominator : LinearExpr) : CpModelM Constraint :=
+  addConstraint (.intDiv target numerator denominator)
 
 /-- `a → b`, encoded as `¬a ∨ b`. -/
 def addImplication (a b : BoolVar) : CpModelM Constraint :=
