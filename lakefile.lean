@@ -53,6 +53,11 @@ def findOrToolsBuild (orToolsDir : FilePath) : IO FilePath := do
         s!"{lib} still missing after building OR-Tools; check the build output above for errors."
   return buildDir
 
+-- `orToolsDir` and `orToolsBuild / "lib"` are treated as a stable interface: consumers
+-- that `require` this package (see the README's "Using cpsat as a dependency") must
+-- reconstruct these same paths themselves, since Lake does not propagate
+-- `weakLeancArgs`/`weakLinkArgs` across a `require`. Keep the README's snippet in sync
+-- with any change here.
 def orToolsDir : FilePath := __dir__ / "or-tools"
 def orToolsBuild : FilePath := run_io findOrToolsBuild orToolsDir
 def orToolsInclude : FilePath := orToolsDir

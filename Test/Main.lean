@@ -209,6 +209,24 @@ def testInfeasible : IO Unit := do
     pure x)
   assertEq resp.status .infeasible "infeasible: expected infeasible"
 
+/-- `Test/downstream-consumer` is a package that only `require`s cpsat (from
+this checkout, via a local path) and builds a normal `lean_exe`, mirroring the
+README's "Using cpsat as a dependency" snippet exactly. Lake does not
+propagate a package's `weakLinkArgs`/`weakLeancArgs` to a consumer's own
+targets, so a downstream package must set them itself; this builds and runs
+that fixture end to end as a regression test for the snippet staying correct. -/
+def testDownstreamConsumer : IO Unit := do
+  let fixtureDir : System.FilePath := "Test/downstream-consumer"
+  let build ← IO.Process.output { cmd := "lake", args := #["build"], cwd := some fixtureDir }
+  assert (build.exitCode == 0)
+    s!"downstream-consumer: `lake build` failed:\n{build.stdout}\n{build.stderr}"
+  let run ← IO.Process.output {
+    cmd := (fixtureDir / ".lake" / "build" / "bin" / "downstreamConsumer").toString
+  }
+  assert (run.exitCode == 0) s!"downstream-consumer: executable failed:\n{run.stderr}"
+  assertEq run.stdout.trimAscii.copy "rabbits = 8, pheasants = 12"
+    "downstream-consumer: unexpected output"
+
 def main : IO Unit := do
   testRabbitsAndPheasants
   testObjective
@@ -224,4 +242,5 @@ def main : IO Unit := do
   testBoolXor
   testAbsEquality
   testInfeasible
+  testDownstreamConsumer
   IO.println "All tests passed."

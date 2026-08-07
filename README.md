@@ -3,20 +3,6 @@
 Lean bindings for the [OR-Tools](https://developers.google.com/optimization)' CP-SAT
 constraint solver.
 
-## Building
-
-This project includes and builds OR-Tools from source. The first build can take well
-over an hour; Subsequent builds will be faster. The [OR-Tools prerequisites](https://developers.google.com/optimization/install/cpp) are required.
-
-### Troubleshooting
-
-If the OR-Tools build fails (likely due to limited memory) try restricting
-the number of cmake jobs with:
-
-```sh
-env LEANCPSAT_ORTOOLS_JOBS=2 lake build
-```
-
 ## Usage
 
 ```lean
@@ -79,6 +65,67 @@ Objectives: `minimize`/`maximize` over a `LinearExpr`.
 - `routes`, `dummy_constraint`
 - Most of `SatParameters` (`SolverParameters` currently exposes only time limit,
   worker count, random seed, and search-progress logging)
+
+## Building
+
+This project includes and builds OR-Tools from source. The first build can take well
+over an hour; Subsequent builds will be faster. The [OR-Tools prerequisites](https://developers.google.com/optimization/install/cpp) are required.
+
+### Troubleshooting
+
+If the OR-Tools build fails (likely due to limited memory) try restricting
+the number of cmake jobs with:
+
+```sh
+env LEANCPSAT_ORTOOLS_JOBS=2 lake build
+```
+
+## Using cpsat as a dependency
+
+```lean
+require cpsat from git
+  "https://github.com/paulbutcher/leancpsat" @ "main"
+```
+
+is not by itself enough to build an executable that `import`s `Cpsat`. Lake never
+propagates a package's `weakLinkArgs`/`weakLeancArgs` to a consumer that merely
+`require`s it; those flags only apply to targets built inside the declaring package
+itself. Since this package finds `-I`/`-L`/`-l`/`-rpath` flags for the vendored,
+locally-built OR-Tools via exactly those fields, a consumer's own executable will fail
+to link with undefined symbols from `cp_solver_c.h` unless it sets the same flags
+itself, pointed at this package's checkout:
+
+```lean
+import Lake
+open Lake DSL System
+
+def cpsatDir : FilePath := __dir__ / ".lake" / "packages" / "cpsat"
+def orToolsLib : FilePath := cpsatDir / "or-tools" / "build" / "lib"
+
+package yourPackage where
+  weakLeancArgs := #["-I", (cpsatDir / "or-tools").toString]
+  weakLinkArgs := #[
+    "-L", orToolsLib.toString, "-lortools", "-lortools_core", s!"-Wl,-rpath,{orToolsLib}"
+  ]
+
+require cpsat from git
+  "https://github.com/paulbutcher/leancpsat" @ "main"
+
+lean_exe yourExe where
+  root := `Main
+```
+
+`.lake/packages/cpsat` is Lake's own, stable convention for where a git `require`
+checks out a dependency named `cpsat` (matching the name in `package cpsat where` in
+this repo's own `lakefile.lean`), so it doesn't depend on how you invoke `require`.
+`or-tools/build/lib` is this package's own vendored OR-Tools build output; see
+`Test/downstream-consumer/` for a working, tested example of this exact snippet.
+
+Note the explicit `FilePath` annotation: under `open Lake DSL` (without `System`), a
+bare `def x : FilePath := ...` elaborates against an implicitly auto-bound `FilePath`
+rather than `System.FilePath`, producing a confusing "type mismatch" error at the
+assignment rather than an "unknown identifier" error. Either `open ... System` (as
+above) or write `System.FilePath` explicitly.
 
 ## License
 
