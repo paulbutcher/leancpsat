@@ -53,11 +53,6 @@ def findOrToolsBuild (orToolsDir : FilePath) : IO FilePath := do
         s!"{lib} still missing after building OR-Tools; check the build output above for errors."
   return buildDir
 
--- `orToolsDir` and `orToolsBuild / "lib"` are treated as a stable interface: consumers
--- that `require` this package (see the README's "Using cpsat as a dependency") must
--- reconstruct these same paths themselves, since Lake does not propagate
--- `weakLeancArgs`/`weakLinkArgs` across a `require`. Keep the README's snippet in sync
--- with any change here.
 def orToolsDir : FilePath := __dir__ / "or-tools"
 def orToolsBuild : FilePath := run_io findOrToolsBuild orToolsDir
 def orToolsInclude : FilePath := orToolsDir
@@ -72,6 +67,22 @@ package cpsat where
   -- the `ortools_core` library, not `ortools` itself, so both must be linked.
   weakLinkArgs := #[
     "-L", orToolsLib.toString, "-lortools", "-lortools_core", s!"-Wl,-rpath,{orToolsLib}"
+  ]
+  -- The flags above only apply to *this* package's own targets (Lake does not
+  -- propagate `weakLeancArgs`/`weakLinkArgs` across a `require`). `moreLinkLibs`
+  -- and `moreLinkObjs`, by contrast, are collected from the owning library of
+  -- every module a consumer transitively imports (`LeanExe.recBuildExe` in
+  -- `Lake/Build/Executable.lean`), the same mechanism that already makes
+  -- `cpsatShim`'s static archive show up on a consumer's link line for free.
+  -- Duplicating the OR-Tools link inputs here, as target references rather
+  -- than raw path strings, is what actually makes a `require`-only consumer
+  -- link: see `orToolsOrtoolsDynlib` et al. below.
+  moreLinkLibs := #[
+    (BuildKey.packageTarget .anonymous `orToolsOrtoolsDynlib : Target Dynlib),
+    (BuildKey.packageTarget .anonymous `orToolsOrtoolsCoreDynlib : Target Dynlib)
+  ]
+  moreLinkObjs := #[
+    (BuildKey.packageTarget .anonymous `orToolsRpathFlag : Target FilePath)
   ]
 
 -- Pinned to a commit, not a tag: upstream has no tagged releases as of this
@@ -98,6 +109,27 @@ extern_lib cpsatShim pkg := do
     #["-I", orToolsInclude.toString, "-I", (← getLeanIncludeDir).toString, "-std=c++20", "-fPIC"]
   let oJob ← buildO oFile srcJob weakArgs (compiler := "c++")
   buildStaticLib (pkg.buildDir / "native" / "libcpsat_shim.a") #[oJob]
+
+/-- Referenced by `package cpsat`'s `moreLinkLibs` (propagates `-L`/`-l` for
+`libortools.so` to any transitive importer of `Cpsat`, including consumers
+that merely `require` this package). -/
+target orToolsOrtoolsDynlib _pkg : Dynlib := do
+  return .pure {path := orToolsLib / nameToSharedLib "ortools", name := "ortools"}
+
+/-- As `orToolsOrtoolsDynlib`, for `libortools_core.so` (see the comment on
+`weakLinkArgs` above for why both are needed). -/
+target orToolsOrtoolsCoreDynlib _pkg : Dynlib := do
+  return .pure {path := orToolsLib / nameToSharedLib "ortools_core", name := "ortools_core"}
+
+/-- Referenced by `package cpsat`'s `moreLinkObjs`. `moreLinkObjs` entries are
+spliced verbatim onto the linker command line (`mkLinkObjArgs` in
+`Lake/Build/Common.lean` just calls `toString` on each and pushes it), so a
+raw `-Wl,-rpath,...` flag round-trips through it unchanged; there's no
+dedicated propagating field for arbitrary linker flags, and `Dynlib` (the type
+`moreLinkLibs` deals in) has no rpath slot. Without this, a consumer's binary
+links but can't find `libortools.so` at runtime. -/
+target orToolsRpathFlag _pkg : FilePath := do
+  return .pure (FilePath.mk s!"-Wl,-rpath,{orToolsLib}")
 
 /--
 Compile-only check, never linked into anything: cross-checks the field
