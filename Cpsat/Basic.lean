@@ -32,6 +32,10 @@ structure CpSolverResponse where
   /-- Indexed by `IntVar.index`. -/
   solution : Array Int64
   wallTime : Float
+  /-- A subset of the model's `markAssumption`ed literals that's jointly
+  sufficient to prove infeasibility. Only populated when `status ==
+  .infeasible`; not guaranteed minimal. -/
+  sufficientAssumptionsForInfeasibility : Array BoolVar
 deriving Inhabited
 
 def CpSolverResponse.value (r : CpSolverResponse) (v : IntVar) : Int64 :=

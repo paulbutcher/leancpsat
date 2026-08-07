@@ -107,6 +107,7 @@ message CpModelProto {
   repeated IntegerVariableProto variables = 2;
   repeated ConstraintProto constraints = 3;
   CpObjectiveProto objective = 4;
+  repeated int32 assumptions = 7 [packed = true];
 }
 
 enum CpSolverStatusProto {
@@ -123,6 +124,7 @@ message CpSolverResponseProto {
   double objective_value = 3;
   double best_objective_bound = 4;
   double wall_time = 15;
+  repeated int32 sufficient_assumptions_for_infeasibility = 23 [packed = true];
 }
 
 message SatParametersProto {
@@ -215,6 +217,7 @@ def modelStateToProto (s : ModelState) : CpModelProto :=
       (s.varDomains.zip s.varNames).map fun (d, n) => { name := n, domain := domainToFlatArray d }
     constraints := s.constraints.map constraintDataToProto
     objective := s.objective.map fun (expr, maximize) => objectiveToProto expr maximize
+    assumptions := s.assumptions.map litRef
   }
 
 def parametersToProto (p : SolverParameters) : SatParametersProto :=
@@ -240,6 +243,8 @@ def responseFromProto (r : CpSolverResponseProto) : CpSolverResponse :=
     bestObjectiveBound := r.best_objective_bound
     solution := r.solution
     wallTime := r.wall_time
+    sufficientAssumptionsForInfeasibility :=
+      r.sufficient_assumptions_for_infeasibility.map fun lit => ⟨lit.toInt⟩
   }
 
 end Cpsat.Proto

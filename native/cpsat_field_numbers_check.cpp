@@ -63,12 +63,14 @@ static_assert(CpModelProto::kNameFieldNumber == 1);
 static_assert(CpModelProto::kVariablesFieldNumber == 2);
 static_assert(CpModelProto::kConstraintsFieldNumber == 3);
 static_assert(CpModelProto::kObjectiveFieldNumber == 4);
+static_assert(CpModelProto::kAssumptionsFieldNumber == 7);
 
 static_assert(CpSolverResponse::kStatusFieldNumber == 1);
 static_assert(CpSolverResponse::kSolutionFieldNumber == 2);
 static_assert(CpSolverResponse::kObjectiveValueFieldNumber == 3);
 static_assert(CpSolverResponse::kBestObjectiveBoundFieldNumber == 4);
 static_assert(CpSolverResponse::kWallTimeFieldNumber == 15);
+static_assert(CpSolverResponse::kSufficientAssumptionsForInfeasibilityFieldNumber == 23);
 
 static_assert(SatParameters::kRandomSeedFieldNumber == 31);
 static_assert(SatParameters::kMaxTimeInSecondsFieldNumber == 36);

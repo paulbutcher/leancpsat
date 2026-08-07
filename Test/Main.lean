@@ -209,6 +209,31 @@ def testInfeasible : IO Unit := do
     pure x)
   assertEq resp.status .infeasible "infeasible: expected infeasible"
 
+/-- Two conflicting constraints, each gated behind its own assumption
+literal: `x <= 1` behind `aLE`, `x >= 5` behind `aGE`. Marking both as
+assumptions (instead of enforcing them unconditionally) lets the infeasible
+solve report which assumptions were jointly responsible, rather than just
+that the model as a whole is infeasible. Since only these two literals are
+marked, and dropping either one leaves the model feasible, the sufficient
+core CP-SAT reports must be exactly both, regardless of how many workers
+solve it. -/
+def testAssumptions : IO Unit := do
+  let ((aLE, aGE), resp) ← solve (m := do
+    let x ← newIntVar (.ofInterval 0 10) "x"
+    let aLE ← newBoolVar "aLE"
+    let aGE ← newBoolVar "aGE"
+    let le ← addLessOrEqual x (.const 1)
+    le.onlyEnforceIf #[aLE]
+    let ge ← addGreaterOrEqual x (.const 5)
+    ge.onlyEnforceIf #[aGE]
+    markAssumptions #[aLE, aGE]
+    pure (aLE, aGE))
+  assertEq resp.status .infeasible "assumptions: expected infeasible"
+  let core := resp.sufficientAssumptionsForInfeasibility
+  assert (core.any (·.literal == aLE.literal)) "assumptions: expected aLE in the sufficient core"
+  assert (core.any (·.literal == aGE.literal)) "assumptions: expected aGE in the sufficient core"
+  assertEq core.size 2 "assumptions: expected exactly the two marked assumptions in the core"
+
 /-- `Test/downstream-consumer` is a package that only `require`s cpsat (from
 this checkout, via a local path) and builds a normal `lean_exe`, mirroring the
 README's "Using cpsat as a dependency" snippet exactly. Lake does not
@@ -242,5 +267,6 @@ def main : IO Unit := do
   testBoolXor
   testAbsEquality
   testInfeasible
+  testAssumptions
   testDownstreamConsumer
   IO.println "All tests passed."

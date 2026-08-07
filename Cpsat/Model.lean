@@ -120,6 +120,8 @@ structure ModelState where
   constraints : Array ConstraintData := #[]
   /-- `some (expr, maximize?)`. -/
   objective : Option (LinearExpr × Bool) := none
+  /-- Literals tracked for infeasibility explanation; see `markAssumption`. -/
+  assumptions : Array BoolVar := #[]
 deriving Inhabited
 
 /-- Model-building is a plain state computation; no FFI is involved until
@@ -243,5 +245,15 @@ def minimize (expr : LinearExpr) : CpModelM Unit :=
 
 def maximize (expr : LinearExpr) : CpModelM Unit :=
   modify fun s => { s with objective := some (expr, true) }
+
+/-- Tracks `b` as an assumption: if the solve comes back infeasible,
+`CpSolverResponse.sufficientAssumptionsForInfeasibility` will report a subset
+of the model's marked assumptions that's jointly sufficient to prove
+infeasibility. -/
+def markAssumption (b : BoolVar) : CpModelM Unit :=
+  modify fun s => { s with assumptions := s.assumptions.push b }
+
+def markAssumptions (bs : Array BoolVar) : CpModelM Unit :=
+  modify fun s => { s with assumptions := s.assumptions ++ bs }
 
 end Cpsat
