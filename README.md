@@ -87,24 +87,6 @@ require cpsat from git
   "https://github.com/paulbutcher/leancpsat" @ "main"
 ```
 
-plus a normal `lean_exe` that `import`s `Cpsat` is all a consumer needs; no extra
-linker configuration is required in the consumer's own `lakefile.lean`. See
-`Test/downstream-consumer/` for a minimal, tested example.
-
-This works despite Lake never propagating a package's `weakLinkArgs`/`weakLeancArgs`
-to a consumer that merely `require`s it (those two fields only apply to targets built
-inside the declaring package itself, so they *wouldn't* help a consumer). Instead,
-this package's `lakefile.lean` attaches the `-I`/`-L`/`-l`/`-rpath` flags needed for
-the vendored, locally-built OR-Tools to two other fields, `moreLinkLibs` and
-`moreLinkObjs`, which Lake *does* collect transitively: `LeanExe.recBuildExe` (in
-Lake's `Build/Executable.lean`) gathers `moreLinkLibs`/`moreLinkObjs` from the owning
-library of every module a `lean_exe` transitively imports, not just from the
-executable's own package. That's the same mechanism that already makes this package's
-`cpsatShim` C++ shim (an `extern_lib`) link into a consumer for free: Lake also always
-collects every transitive dependency's `extern_lib` static archives into an
-executable's link line, unconditionally. Only the additional OR-Tools flags needed
-propagating explicitly, which is what `moreLinkLibs`/`moreLinkObjs` are for.
-
 ## License
 
 Apache License 2.0 - see [LICENSE](LICENSE). OR-Tools itself (vendored under
