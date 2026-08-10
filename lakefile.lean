@@ -57,6 +57,63 @@ def orToolsDir : FilePath := __dir__ / "or-tools"
 def orToolsBuild : FilePath := run_io findOrToolsBuild orToolsDir
 def orToolsInclude : FilePath := orToolsDir
 def orToolsLib : FilePath := orToolsBuild / "lib"
+def orToolsDeps : FilePath := orToolsBuild / "_deps"
+
+/-- The bare library names (`Cbc` from `libCbc.so.2`) `ldd` reports as
+`NEEDED` by the given shared library. -/
+def lddNeededNames (lib : FilePath) : IO (Array String) := do
+  let out ← IO.Process.output { cmd := "ldd", args := #[lib.toString] }
+  unless out.exitCode == 0 do
+    throw <| IO.userError s!"`ldd {lib}` failed:\n{out.stderr}"
+  let mut names := #[]
+  for line in out.stdout.splitOn "\n" do
+    let fields := line.splitOn "=>"
+    if fields.length > 1 then
+      let soname := fields[0]!.trimAscii.toString
+      if soname.startsWith "lib" then
+        names := names.push ((soname.drop 3).toString.splitOn ".so")[0]!
+  return names
+
+-- Elaboration-time only: the actual `Dynlib` values (`orToolsCoreDeps` below) are built from
+-- this via a plain, non-`IO` `def`, since `Dynlib` (unlike `Array String`) has no `ToExpr`
+-- instance for `run_io` to embed a computed value of that type as a literal term.
+def orToolsCoreDepNames : Array String :=
+  run_io lddNeededNames (orToolsLib / nameToSharedLib "ortools_core")
+
+/-- Every shared library `libortools_core.so` itself depends on (absl,
+protobuf, the solver backends it links against, ...), as `Dynlib` values
+pointing into `orToolsLib` (where OR-Tools' CMake build places every shared
+library it produces or vendors, including these) - except `stdc++`, handled
+separately by `systemLibStdCxx` below (see its docstring for why). Needed
+because `cpsatShim` now links directly against OR-Tools' advanced C++ API
+(`Model`, `SolveCpModel`, `NewFeasibleSolutionObserver`) for the streaming
+solve, not just the trimmed C API (`cp_solver_c.h`): any translation unit
+that instantiates absl/protobuf's header-only template code needs the
+specific `.so` providing the matching out-of-line symbols linked in
+directly, since the static linker (unlike the runtime loader) doesn't chase
+another library's own dependencies to resolve undefined symbols. Read from
+`ldd` rather than hand-listed so an OR-Tools version bump that adds or
+renames a dependency doesn't silently break the link. -/
+def orToolsCoreDeps : Array Dynlib :=
+  (orToolsCoreDepNames.filter (· != "stdc++")).map
+    fun name => {path := orToolsLib / nameToSharedLib name, name}
+
+/-- The absolute path to the system's real GNU libstdc++, its fully-versioned filename rather
+than the bare `libstdc++.so`, which commonly resolves to a linker script rather than a real
+shared object.
+
+`cpsatShim` is compiled with the system C++ compiler (see its docstring for why) and so needs
+real libstdc++ symbols (`std::thread`, `std::condition_variable`, ...), but Lean's own bundled
+`clang` has no libstdc++ at all: it targets `libc++`, and - subtly - silently substitutes its own
+bundled `libc++`/`libc++abi`/`libunwind` for a plain `-lstdc++` link flag rather than erroring or
+finding the system one, so that flag alone doesn't work here. An absolute path bypasses this
+substitution entirely. -/
+def systemLibStdCxx : FilePath :=
+  run_io do
+    let out ← IO.Process.output { cmd := "c++", args := #["-print-file-name=libstdc++.so.6"] }
+    unless out.exitCode == 0 do
+      throw <| IO.userError s!"failed to locate the system's libstdc++.so.6:\n{out.stderr}"
+    return FilePath.mk out.stdout.trimAscii.toString
 
 package cpsat where
   version := v!"0.1.0"
@@ -82,7 +139,9 @@ package cpsat where
     (BuildKey.packageTarget .anonymous `orToolsOrtoolsCoreDynlib : Target Dynlib)
   ]
   moreLinkObjs := #[
-    (BuildKey.packageTarget .anonymous `orToolsRpathFlag : Target FilePath)
+    (BuildKey.packageTarget .anonymous `orToolsRpathFlag : Target FilePath),
+    (BuildKey.packageTarget .anonymous `systemLibStdCxxFlag : Target FilePath),
+    (BuildKey.packageTarget .anonymous `allowShlibUndefinedFlag : Target FilePath)
   ]
 
 -- Pinned to a commit, not a tag: upstream has no tagged releases as of this
@@ -95,18 +154,33 @@ require protobuf from git
 lean_lib Cpsat
 
 /--
-The C++ shim over CP-SAT's own `cp_solver_c.h` C API: bytes in, bytes out.
+The C++ shim over CP-SAT's C APIs: bytes in, bytes out.
 
 Built with the system C++ compiler via `buildO`, not `buildLeanO`: the latter
 compiles with Lean's bundled clang under `-nostdinc --sysroot <lean-toolchain>`,
 which has no C++ standard library headers, since it's meant for Lean's own
 generated C output rather than hand-written C++.
+
+Needs the same wider include path as `cpsatFieldNumberCheck` (protobuf/absl
+headers, not just `cp_solver_c.h`'s pure-C API), since the streaming solve
+calls OR-Tools' advanced C++ API (`cp_model_solver.h`) directly. `-DNDEBUG`
+must match how OR-Tools' own build compiled these headers
+(`or-tools/build/compile_commands.json`): several absl/protobuf class layouts
+are conditional on it, and a mismatch corrupts memory silently rather than
+failing to compile or link.
 -/
 extern_lib cpsatShim pkg := do
   let srcJob ← inputTextFile <| pkg.dir / "native" / "cpsat_shim.cpp"
   let oFile := pkg.buildDir / "native" / "cpsat_shim.o"
-  let weakArgs :=
-    #["-I", orToolsInclude.toString, "-I", (← getLeanIncludeDir).toString, "-std=c++20", "-fPIC"]
+  let weakArgs := #[
+    "-I", orToolsInclude.toString,
+    "-I", orToolsBuild.toString,
+    "-I", (← getLeanIncludeDir).toString,
+    "-isystem", (orToolsDeps / "protobuf-src" / "src").toString,
+    "-isystem", (orToolsDeps / "absl-src").toString,
+    "-isystem", (orToolsDeps / "protobuf-src" / "third_party" / "utf8_range").toString,
+    "-DOR_ORTOOLS_PROTO_DLL=", "-DNDEBUG", "-std=c++20", "-fPIC", "-pthread"
+  ]
   let oJob ← buildO oFile srcJob weakArgs (compiler := "c++")
   buildStaticLib (pkg.buildDir / "native" / "libcpsat_shim.a") #[oJob]
 
@@ -117,9 +191,15 @@ target orToolsOrtoolsDynlib _pkg : Dynlib := do
   return .pure {path := orToolsLib / nameToSharedLib "ortools", name := "ortools"}
 
 /-- As `orToolsOrtoolsDynlib`, for `libortools_core.so` (see the comment on
-`weakLinkArgs` above for why both are needed). -/
+`weakLinkArgs` above for why both are needed). Carries `orToolsCoreDeps` as
+`deps` so `Lake.mkLinkOrder` (which every `buildLeanExe` call consults, not
+just this package's own) flattens them onto any consuming executable's link
+line too, without needing a separate named target per library. -/
 target orToolsOrtoolsCoreDynlib _pkg : Dynlib := do
-  return .pure {path := orToolsLib / nameToSharedLib "ortools_core", name := "ortools_core"}
+  return .pure {
+    path := orToolsLib / nameToSharedLib "ortools_core", name := "ortools_core"
+    deps := orToolsCoreDeps
+  }
 
 /-- Referenced by `package cpsat`'s `moreLinkObjs`. `moreLinkObjs` entries are
 spliced verbatim onto the linker command line (`mkLinkObjArgs` in
@@ -131,6 +211,22 @@ links but can't find `libortools.so` at runtime. -/
 target orToolsRpathFlag _pkg : FilePath := do
   return .pure (FilePath.mk s!"-Wl,-rpath,{orToolsLib}")
 
+/-- As `orToolsRpathFlag`, splicing `systemLibStdCxx`'s absolute path directly onto the link
+line via `moreLinkObjs` (see its docstring for why a bare `-lstdc++` doesn't work here). -/
+target systemLibStdCxxFlag _pkg : FilePath := do
+  return .pure systemLibStdCxx
+
+/-- As `orToolsRpathFlag`, splicing `-Wl,--allow-shlib-undefined` onto the link line: several of
+`orToolsCoreDeps` (e.g. `libabsl_exponential_biased.so`, which calls `log2`) were built against a
+newer glibc than the one Lean's own bundled `clang` links against by default, so the static
+linker sees them as having their own unresolved symbols. That's fine - those symbols are meant to
+be resolved by the *dynamic* loader against the system's actual glibc at run time, exactly as
+they already are for the OR-Tools shared libraries this project depended on before the streaming
+solve existed; this flag just tells the static linker not to treat that as an error. It does not
+weaken checking of `cpsatShim`'s own symbols, only of other shared libraries' internal ones. -/
+target allowShlibUndefinedFlag _pkg : FilePath := do
+  return .pure (FilePath.mk "-Wl,--allow-shlib-undefined")
+
 /--
 Compile-only check, never linked into anything: cross-checks the field
 numbers hand-declared in `Cpsat/Proto.lean` against protoc's own generated
@@ -138,22 +234,21 @@ constants in `cp_model.pb.h`/`sat_parameters.pb.h`. `@[default_target]` so it
 runs on every plain `lake build`, not just when something happens to link the
 shim (`cpsatShim` itself only gets built on demand, e.g. by `lake test`).
 
-Needs a much wider include path than `cpsatShim`: unlike `cp_solver_c.h` (pure
-C, no protobuf), `cp_model.pb.h` is protoc-generated C++ pulling in the
-in-tree protobuf/abseil headers OR-Tools built against - the exact flags CMake
-itself uses to compile `cp_model.pb.cc`, per `or-tools/build/compile_commands.json`.
+`cp_model.pb.h` is protoc-generated C++ pulling in the in-tree protobuf/abseil
+headers OR-Tools built against - the exact flags CMake itself uses to compile
+`cp_model.pb.cc`, per `or-tools/build/compile_commands.json` (the same ones
+`cpsatShim` now needs too, for the same reason).
 -/
 @[default_target]
 extern_lib cpsatFieldNumberCheck pkg := do
   let srcJob ← inputTextFile <| pkg.dir / "native" / "cpsat_field_numbers_check.cpp"
   let oFile := pkg.buildDir / "native" / "cpsat_field_numbers_check.o"
-  let deps := orToolsBuild / "_deps"
   let weakArgs := #[
     "-I", orToolsInclude.toString,
     "-I", orToolsBuild.toString,
-    "-isystem", (deps / "protobuf-src" / "src").toString,
-    "-isystem", (deps / "absl-src").toString,
-    "-isystem", (deps / "protobuf-src" / "third_party" / "utf8_range").toString,
+    "-isystem", (orToolsDeps / "protobuf-src" / "src").toString,
+    "-isystem", (orToolsDeps / "absl-src").toString,
+    "-isystem", (orToolsDeps / "protobuf-src" / "third_party" / "utf8_range").toString,
     "-DOR_ORTOOLS_PROTO_DLL=", "-std=c++20", "-fPIC"
   ]
   let oJob ← buildO oFile srcJob weakArgs (compiler := "c++")

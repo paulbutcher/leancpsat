@@ -234,6 +234,66 @@ def testAssumptions : IO Unit := do
   assert (core.any (·.literal == aGE.literal)) "assumptions: expected aGE in the sufficient core"
   assertEq core.size 2 "assumptions: expected exactly the two marked assumptions in the core"
 
+/-- A 0/1 knapsack (maximize total value of selected items subject to a weight capacity), sized
+and varied enough that CP-SAT, restricted to a single worker for a deterministic sequence of
+incumbents, finds more than one feasible solution en route to the optimum. -/
+def knapsack : CpModelM Unit := do
+  let n := 30
+  let items ← (List.range n).toArray.mapM fun _ => newIntVar (.ofInterval 0 1)
+  let weight (i : Nat) : Int64 := Int64.ofNat ((i % 7) + 3)
+  let value (i : Nat) : Int64 := Int64.ofNat (((i * 5) % 13) + 1)
+  let mut weightExpr := LinearExpr.const 0
+  let mut valueExpr := LinearExpr.const 0
+  let mut capacity : Int64 := 0
+  for i in [0:n] do
+    weightExpr := weightExpr + weight i * items[i]!
+    valueExpr := valueExpr + value i * items[i]!
+    capacity := capacity + weight i
+  let _ ← addLessOrEqual weightExpr (.const (capacity * 6 / 10))
+  maximize valueExpr
+
+/-- Streaming solve of `knapsack`: every `onSolution` callback should fire before the final
+response, in increasing objective order (CP-SAT only calls it on improving solutions), and the
+final response should agree with what `solveInterruptible` finds for the same model. -/
+def testStreamingSolve : IO Unit := do
+  let params : SolverParameters := { numWorkers := some 1 }
+  let objectivesRef ← IO.mkRef (#[] : Array Float)
+  let ((), streamResp) ← solveWithSolutionCallback params (← StopToken.new)
+    (fun resp => objectivesRef.modify (·.push resp.objectiveValue)) knapsack
+  let objectives ← objectivesRef.get
+  assert (objectives.size ≥ 1) "streamingSolve: expected at least one onSolution callback"
+  for i in [1:objectives.size] do
+    assert (objectives[i]! ≥ objectives[i - 1]!)
+      "streamingSolve: expected each callback's objective to be at least as good as the previous"
+  assertEq streamResp.status .optimal "streamingSolve: expected optimal"
+  assertEq objectives.back! streamResp.objectiveValue
+    "streamingSolve: last callback should report the same objective as the final response"
+
+  let (_, plainResp) ← solveInterruptible params (← StopToken.new) knapsack
+  assertEq plainResp.status streamResp.status
+    "streamingSolve: status should match solveInterruptible"
+  assertEq plainResp.objectiveValue streamResp.objectiveValue
+    "streamingSolve: objective should match solveInterruptible"
+
+/-- Calling `StopToken.stop` from within `onSolution`, after the first callback, should still let
+`solveWithSolutionCallback` return promptly (rather than run `knapsack` to completion), mirroring
+`solveInterruptible`'s cancellation contract. -/
+def testStreamingSolveStop : IO Unit := do
+  let params : SolverParameters := { numWorkers := some 1 }
+  let token ← StopToken.new
+  let stoppedRef ← IO.mkRef false
+  let start ← IO.monoMsNow
+  let ((), resp) ← solveWithSolutionCallback params token
+    (fun _resp => do
+      unless ← stoppedRef.get do
+        stoppedRef.set true
+        token.stop) knapsack
+  let elapsed ← IO.monoMsNow
+  assert (elapsed - start < 10000)
+    "streamingSolveStop: expected StopToken.stop to make the call return promptly"
+  assert (resp.status == .optimal || resp.status == .feasible)
+    "streamingSolveStop: expected a feasible or optimal response after stopping early"
+
 /-- `Test/downstream-consumer` is a package that only `require`s cpsat (from
 this checkout, via a local path) and builds a normal `lean_exe`, mirroring the
 README's "Using cpsat as a dependency" snippet exactly. Lake does not
@@ -268,5 +328,7 @@ def main : IO Unit := do
   testAbsEquality
   testInfeasible
   testAssumptions
+  testStreamingSolve
+  testStreamingSolveStop
   testDownstreamConsumer
   IO.println "All tests passed."
