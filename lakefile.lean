@@ -211,10 +211,17 @@ links but can't find `libortools.so` at runtime. -/
 target orToolsRpathFlag _pkg : FilePath := do
   return .pure (FilePath.mk s!"-Wl,-rpath,{orToolsLib}")
 
-/-- As `orToolsRpathFlag`, splicing `systemLibStdCxx`'s absolute path directly onto the link
-line via `moreLinkObjs` (see its docstring for why a bare `-lstdc++` doesn't work here). -/
+/-- As `orToolsRpathFlag`, splicing `systemLibStdCxx`'s absolute path onto the link line via
+`moreLinkObjs` (see its docstring for why a bare `-lstdc++` doesn't work here) - wrapped in
+`-Wl,` rather than passed as a bare positional argument, so `clang`'s driver forwards it to the
+linker completely opaquely instead of inspecting it as an input file. A bare path apparently
+lets `clang`'s own C++ standard library/runtime detection notice it's GNU `libstdc++` and (only
+observed on x86_64 CI so far, not the aarch64 machine this was developed on) switch its default
+low-level runtime support library from its own bundled `compiler-rt` to the system's `libgcc`,
+which isn't available in Lean's sysroot at all (`ld.lld: error: unable to find library -lgcc`);
+`-Wl,` sidesteps that detection instead of fighting it. -/
 target systemLibStdCxxFlag _pkg : FilePath := do
-  return .pure systemLibStdCxx
+  return .pure (FilePath.mk s!"-Wl,{systemLibStdCxx}")
 
 /-- As `orToolsRpathFlag`, splicing `-Wl,--allow-shlib-undefined` onto the link line: several of
 `orToolsCoreDeps` (e.g. `libabsl_exponential_biased.so`, which calls `log2`) were built against a
