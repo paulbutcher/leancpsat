@@ -33,10 +33,12 @@ jobs:
           # shared CI runner; pin it down explicitly here.
           LEANCPSAT_ORTOOLS_JOBS: 4
 
-      # Temporary: dumps the exact failing link command (full args, plus a
-      # verbose re-run showing the actual ld invocation) so a `-lgcc`-style
-      # linker failure can be diagnosed from the Actions log instead of
-      # guessed at. Remove once the streaming-solve link issue is resolved.
+      # Temporary: dumps the exact failing link command, a verbose re-run
+      # showing the actual ld invocation with a file-open trace, and scans
+      # every shared library referenced for embedded GNU ld GROUP()/INPUT()
+      # linker scripts (a `-lgcc` never appears as a literal flag on the
+      # command line, so it must come from inside one of these). Remove once
+      # the streaming-solve link issue is resolved.
       - name: Debug link failure
         if: failure()
         run: |
@@ -51,6 +53,21 @@ jobs:
           CLANG=$(find "$HOME/.elan" -type f -name clang -path "*bin*" 2>/dev/null | head -1)
           echo "=== clang: $CLANG ==="
           if [ -n "$CLANG" ] && [ -f "$RSP" ]; then
-            echo "=== verbose relink ==="
-            "$CLANG" -v -o /tmp/test_debug @"$RSP" 2>&1 | tail -150
+            echo "=== verbose relink (with ld file-open trace) ==="
+            "$CLANG" -v -Wl,-t -o /tmp/test_debug @"$RSP" 2>&1 | tail -400
           fi
+          echo "=== scanning linked .so files for embedded linker scripts (non-ELF) ==="
+          for dir in /usr/lib/gcc/x86_64-linux-gnu/*/../../../x86_64-linux-gnu \
+                     /usr/lib/x86_64-linux-gnu /lib/x86_64-linux-gnu \
+                     "$HOME"/.elan/toolchains/*/lib "$HOME"/.elan/toolchains/*/lib/glibc \
+                     "${GITHUB_WORKSPACE}"/or-tools/build/lib; do
+            [ -d "$dir" ] || continue
+            for f in "$dir"/lib*.so*; do
+              [ -f "$f" ] || continue
+              if ! head -c 4 "$f" | cmp -s - <(printf '\177ELF'); then
+                echo "--- non-ELF (likely linker script): $f ---"
+                head -c 500 "$f"
+                echo
+              fi
+            done
+          done

@@ -115,6 +115,26 @@ def systemLibStdCxx : FilePath :=
       throw <| IO.userError s!"failed to locate the system's libstdc++.so.6:\n{out.stderr}"
     return FilePath.mk out.stdout.trimAscii.toString
 
+/-- The directory containing the system's `libgcc.a`, GCC's own low-level runtime support
+library (division helpers, unwind glue, ...).
+
+On some platforms (observed on x86_64 CI; not the aarch64 machine this was developed on), the
+bare `libgcc_s.so` found via the default search path isn't a real shared object but a GNU ld
+linker script (`GROUP ( libgcc_s.so.1 -lgcc )`); resolving the `-lgcc_s` this project (and Lean's
+own default link flags) already need can therefore transitively require finding `-lgcc` too,
+which isn't anywhere on the search path Lean's own bundled `clang`/`--sysroot` looks under
+(`ld.lld: error: unable to find library -lgcc`, with no `-lgcc` on the command line at all -
+it's pulled in by that script). Adding this directory to the search path lets it resolve. -/
+def systemLibGccDir : FilePath :=
+  run_io do
+    let out ← IO.Process.output { cmd := "c++", args := #["-print-file-name=libgcc.a"] }
+    unless out.exitCode == 0 do
+      throw <| IO.userError s!"failed to locate the system's libgcc.a:\n{out.stderr}"
+    let path := FilePath.mk out.stdout.trimAscii.toString
+    match path.parent with
+    | some dir => return dir
+    | none => throw <| IO.userError s!"libgcc.a path {path} has no parent directory"
+
 package cpsat where
   version := v!"0.1.0"
   -- Weak: these embed a local, machine-specific path, so they must not affect
@@ -141,6 +161,7 @@ package cpsat where
   moreLinkObjs := #[
     (BuildKey.packageTarget .anonymous `orToolsRpathFlag : Target FilePath),
     (BuildKey.packageTarget .anonymous `systemLibStdCxxFlag : Target FilePath),
+    (BuildKey.packageTarget .anonymous `systemLibGccDirFlag : Target FilePath),
     (BuildKey.packageTarget .anonymous `allowShlibUndefinedFlag : Target FilePath)
   ]
 
@@ -214,14 +235,14 @@ target orToolsRpathFlag _pkg : FilePath := do
 /-- As `orToolsRpathFlag`, splicing `systemLibStdCxx`'s absolute path onto the link line via
 `moreLinkObjs` (see its docstring for why a bare `-lstdc++` doesn't work here) - wrapped in
 `-Wl,` rather than passed as a bare positional argument, so `clang`'s driver forwards it to the
-linker completely opaquely instead of inspecting it as an input file. A bare path apparently
-lets `clang`'s own C++ standard library/runtime detection notice it's GNU `libstdc++` and (only
-observed on x86_64 CI so far, not the aarch64 machine this was developed on) switch its default
-low-level runtime support library from its own bundled `compiler-rt` to the system's `libgcc`,
-which isn't available in Lean's sysroot at all (`ld.lld: error: unable to find library -lgcc`);
-`-Wl,` sidesteps that detection instead of fighting it. -/
+linker completely opaquely instead of inspecting it as an input file. -/
 target systemLibStdCxxFlag _pkg : FilePath := do
   return .pure (FilePath.mk s!"-Wl,{systemLibStdCxx}")
+
+/-- As `orToolsRpathFlag`, adding `systemLibGccDir` to the link search path (see its docstring
+for why). -/
+target systemLibGccDirFlag _pkg : FilePath := do
+  return .pure (FilePath.mk s!"-L{systemLibGccDir}")
 
 /-- As `orToolsRpathFlag`, splicing `-Wl,--allow-shlib-undefined` onto the link line: several of
 `orToolsCoreDeps` (e.g. `libabsl_exponential_biased.so`, which calls `log2`) were built against a
