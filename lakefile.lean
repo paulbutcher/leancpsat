@@ -59,48 +59,76 @@ def orToolsInclude : FilePath := orToolsDir
 def orToolsLib : FilePath := orToolsBuild / "lib"
 def orToolsDeps : FilePath := orToolsBuild / "_deps"
 
-/-- The bare library names (`Cbc` from `libCbc.so.2`) `ldd` reports as
-`NEEDED` by the given shared library. -/
-def lddNeededNames (lib : FilePath) : IO (Array String) := do
-  let out ← IO.Process.output { cmd := "ldd", args := #[lib.toString] }
-  unless out.exitCode == 0 do
-    throw <| IO.userError s!"`ldd {lib}` failed:\n{out.stderr}"
-  let mut names := #[]
-  for line in out.stdout.splitOn "\n" do
-    let fields := line.splitOn "=>"
-    if fields.length > 1 then
-      let soname := fields[0]!.trimAscii.toString
-      if soname.startsWith "lib" then
-        names := names.push ((soname.drop 3).toString.splitOn ".so")[0]!
-  return names
+/-- True on neither macOS nor Windows. The GNU-linker-specific workarounds below
+(`systemLibStdCxx`/`systemLibGccDir`/`allowShlibUndefinedFlag`) only make sense here: macOS's
+`clang`/`ld64` uses `libc++` natively (no libstdc++/libgcc to reconcile) and has no concept of a
+GNU ld `GROUP()` linker script; this project doesn't target Windows at all. -/
+def isLinux : Bool := !Platform.isOSX && !Platform.isWindows
+
+/-- The bare library names (e.g. `Cbc` from `libCbc.so.2`, or `absl_base` from
+`@rpath/libabsl_base.dylib`) that the platform's own dependency-inspection tool (`ldd` on Linux,
+`otool -L` on macOS) reports as a direct dependency of the given shared library. On macOS, skips
+anything under `/usr/lib` or `/System`: those are always resolvable via the system's own default
+search and don't need the explicit help this is for (see `orToolsCoreDeps`'s docstring). Returns
+`#[]` on Windows, since this project doesn't target it and neither inspection tool exists there. -/
+def sharedLibDepNames (lib : FilePath) : IO (Array String) := do
+  if Platform.isWindows then
+    return #[]
+  else if Platform.isOSX then
+    let out ← IO.Process.output { cmd := "otool", args := #["-L", lib.toString] }
+    unless out.exitCode == 0 do
+      throw <| IO.userError s!"`otool -L {lib}` failed:\n{out.stderr}"
+    let mut names := #[]
+    -- The first line names `lib` itself; the rest are
+    -- `\t<path> (compatibility version ..., current version ...)`.
+    for line in out.stdout.splitOn "\n" |>.drop 1 do
+      let line := line.trimAscii.toString
+      if line.isEmpty then continue
+      let path := (line.splitOn " (")[0]!
+      if path.startsWith "/usr/lib" || path.startsWith "/System" then continue
+      let base := (FilePath.mk path).fileName.getD path
+      if base.startsWith "lib" then
+        names := names.push ((base.drop 3).toString.splitOn ".dylib")[0]!
+    return names
+  else
+    let out ← IO.Process.output { cmd := "ldd", args := #[lib.toString] }
+    unless out.exitCode == 0 do
+      throw <| IO.userError s!"`ldd {lib}` failed:\n{out.stderr}"
+    let mut names := #[]
+    for line in out.stdout.splitOn "\n" do
+      let fields := line.splitOn "=>"
+      if fields.length > 1 then
+        let soname := fields[0]!.trimAscii.toString
+        if soname.startsWith "lib" then
+          names := names.push ((soname.drop 3).toString.splitOn ".so")[0]!
+    return names
 
 -- Elaboration-time only: the actual `Dynlib` values (`orToolsCoreDeps` below) are built from
 -- this via a plain, non-`IO` `def`, since `Dynlib` (unlike `Array String`) has no `ToExpr`
 -- instance for `run_io` to embed a computed value of that type as a literal term.
 def orToolsCoreDepNames : Array String :=
-  run_io lddNeededNames (orToolsLib / nameToSharedLib "ortools_core")
+  run_io sharedLibDepNames (orToolsLib / nameToSharedLib "ortools_core")
 
-/-- Every shared library `libortools_core.so` itself depends on (absl,
-protobuf, the solver backends it links against, ...), as `Dynlib` values
-pointing into `orToolsLib` (where OR-Tools' CMake build places every shared
-library it produces or vendors, including these) - except `stdc++`, handled
-separately by `systemLibStdCxx` below (see its docstring for why). Needed
-because `cpsatShim` now links directly against OR-Tools' advanced C++ API
-(`Model`, `SolveCpModel`, `NewFeasibleSolutionObserver`) for the streaming
-solve, not just the trimmed C API (`cp_solver_c.h`): any translation unit
-that instantiates absl/protobuf's header-only template code needs the
-specific `.so` providing the matching out-of-line symbols linked in
-directly, since the static linker (unlike the runtime loader) doesn't chase
-another library's own dependencies to resolve undefined symbols. Read from
-`ldd` rather than hand-listed so an OR-Tools version bump that adds or
-renames a dependency doesn't silently break the link. -/
+/-- Every shared library `libortools_core.so`/`libortools_core.dylib` itself depends on (absl,
+protobuf, the solver backends it links against, ...), as `Dynlib` values pointing into
+`orToolsLib` (where OR-Tools' CMake build places every shared library it produces or vendors,
+including these) - except `stdc++` on Linux, handled separately by `systemLibStdCxx` below (see
+its docstring for why). Needed because `cpsatShim` now links directly against OR-Tools' advanced
+C++ API (`Model`, `SolveCpModel`, `NewFeasibleSolutionObserver`) for the streaming solve, not
+just the trimmed C API (`cp_solver_c.h`): any translation unit that instantiates absl/protobuf's
+header-only template code needs the specific shared library providing the matching out-of-line
+symbols linked in directly, since the static linker (unlike the runtime loader) doesn't chase
+another library's own dependencies to resolve undefined symbols. Read from `ldd`/`otool -L`
+rather than hand-listed so an OR-Tools version bump that adds or renames a dependency doesn't
+silently break the link. -/
 def orToolsCoreDeps : Array Dynlib :=
   (orToolsCoreDepNames.filter (· != "stdc++")).map
     fun name => {path := orToolsLib / nameToSharedLib name, name}
 
 /-- The absolute path to the system's real GNU libstdc++, its fully-versioned filename rather
 than the bare `libstdc++.so`, which commonly resolves to a linker script rather than a real
-shared object.
+shared object. Linux only (see `isLinux`); the underlying `c++ -print-file-name` call never runs
+on other platforms.
 
 `cpsatShim` is compiled with the system C++ compiler (see its docstring for why) and so needs
 real libstdc++ symbols (`std::thread`, `std::condition_variable`, ...), but Lean's own bundled
@@ -110,13 +138,15 @@ finding the system one, so that flag alone doesn't work here. An absolute path b
 substitution entirely. -/
 def systemLibStdCxx : FilePath :=
   run_io do
+    if !isLinux then return FilePath.mk ""
     let out ← IO.Process.output { cmd := "c++", args := #["-print-file-name=libstdc++.so.6"] }
     unless out.exitCode == 0 do
       throw <| IO.userError s!"failed to locate the system's libstdc++.so.6:\n{out.stderr}"
     return FilePath.mk out.stdout.trimAscii.toString
 
 /-- The directory containing the system's `libgcc.a`, GCC's own low-level runtime support
-library (division helpers, unwind glue, ...).
+library (division helpers, unwind glue, ...). Linux only (see `isLinux`); the underlying
+`c++ -print-file-name` call never runs on other platforms.
 
 On some platforms (observed on x86_64 CI; not the aarch64 machine this was developed on), the
 bare `libgcc_s.so` found via the default search path isn't a real shared object but a GNU ld
@@ -127,6 +157,7 @@ which isn't anywhere on the search path Lean's own bundled `clang`/`--sysroot` l
 it's pulled in by that script). Adding this directory to the search path lets it resolve. -/
 def systemLibGccDir : FilePath :=
   run_io do
+    if !isLinux then return FilePath.mk ""
     let out ← IO.Process.output { cmd := "c++", args := #["-print-file-name=libgcc.a"] }
     unless out.exitCode == 0 do
       throw <| IO.userError s!"failed to locate the system's libgcc.a:\n{out.stderr}"
@@ -158,12 +189,19 @@ package cpsat where
     (BuildKey.packageTarget .anonymous `orToolsOrtoolsDynlib : Target Dynlib),
     (BuildKey.packageTarget .anonymous `orToolsOrtoolsCoreDynlib : Target Dynlib)
   ]
-  moreLinkObjs := #[
-    (BuildKey.packageTarget .anonymous `orToolsRpathFlag : Target FilePath),
-    (BuildKey.packageTarget .anonymous `systemLibStdCxxFlag : Target FilePath),
-    (BuildKey.packageTarget .anonymous `systemLibGccDirFlag : Target FilePath),
-    (BuildKey.packageTarget .anonymous `allowShlibUndefinedFlag : Target FilePath)
-  ]
+  -- `systemLibStdCxxFlag`/`systemLibGccDirFlag`/`allowShlibUndefinedFlag` are GNU-linker-specific
+  -- (see `isLinux`'s docstring) and only included on Linux, so they're never fetched - and so
+  -- never run their underlying `c++ -print-file-name`/etc probes - on a platform where those
+  -- workarounds don't apply and the tools they shell out to may not even exist.
+  moreLinkObjs :=
+    #[(BuildKey.packageTarget .anonymous `orToolsRpathFlag : Target FilePath)] ++
+    if isLinux then
+      #[
+        (BuildKey.packageTarget .anonymous `systemLibStdCxxFlag : Target FilePath),
+        (BuildKey.packageTarget .anonymous `systemLibGccDirFlag : Target FilePath),
+        (BuildKey.packageTarget .anonymous `allowShlibUndefinedFlag : Target FilePath)
+      ]
+    else #[]
 
 -- Pinned to a commit, not a tag: upstream has no tagged releases as of this
 -- writing. Validated against this project's lean-toolchain (v4.32.2) despite
