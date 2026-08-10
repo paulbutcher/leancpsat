@@ -32,3 +32,25 @@ jobs:
           # Bare `-j` (cmake's own heuristic) can overcommit memory on a
           # shared CI runner; pin it down explicitly here.
           LEANCPSAT_ORTOOLS_JOBS: 4
+
+      # Temporary: dumps the exact failing link command (full args, plus a
+      # verbose re-run showing the actual ld invocation) so a `-lgcc`-style
+      # linker failure can be diagnosed from the Actions log instead of
+      # guessed at. Remove once the streaming-solve link issue is resolved.
+      - name: Debug link failure
+        if: failure()
+        run: |
+          set +e
+          RSP=.lake/build/bin/test.rsp
+          if [ -f "$RSP" ]; then
+            echo "=== $RSP ($(wc -l < "$RSP") args) ==="
+            cat "$RSP"
+          else
+            echo "=== $RSP not found ==="
+          fi
+          CLANG=$(find "$HOME/.elan" -type f -name clang -path "*bin*" 2>/dev/null | head -1)
+          echo "=== clang: $CLANG ==="
+          if [ -n "$CLANG" ] && [ -f "$RSP" ]; then
+            echo "=== verbose relink ==="
+            "$CLANG" -v -o /tmp/test_debug @"$RSP" 2>&1 | tail -150
+          fi
