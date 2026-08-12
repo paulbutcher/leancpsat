@@ -7,7 +7,11 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
     # Generous headroom for a cache-miss run: `or-tools/build` isn't
     # committed (or-tools/.gitignore excludes it), so building it from
     # scratch with -DBUILD_DEPS=ON compiles abseil/protobuf/re2/CBC/SCIP/
