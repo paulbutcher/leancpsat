@@ -26,8 +26,8 @@ def main : IO Unit := do
 `solve` takes an optional `SolverParameters` (time limit, worker count, random seed,
 whether to log search progress) and returns whatever your model-building computation
 returned, paired with the `CpSolverResponse` (status, objective value, solution
-values, timing). `solveInterruptible` is the same, but cooperatively cancellable via a
-`StopToken` from another task.
+values, timing, and the subsolver that found the solution). `solveInterruptible` is the
+same, but cooperatively cancellable via a `StopToken` from another task.
 
 See `Test/Main.lean` for a worked example of every constraint kind below, each with a
 known expected result asserted against the actual solver.
@@ -57,6 +57,11 @@ Constraints:
 - `Constraint.onlyEnforceIf` (half-reification via enforcement literals)
 
 Objectives: `minimize`/`maximize` over a `LinearExpr`.
+
+Solution hints: `addSolutionHint`/`addBoolSolutionHint` offer a partial assignment (say a
+solution to an earlier, slightly different model) as a starting point for the search. A
+hint is advice, not a constraint: it never changes which solutions are feasible or what
+the optimum is, and may be partial, infeasible, or outside a variable's domain.
 
 ## What's not yet covered
 

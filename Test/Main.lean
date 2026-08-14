@@ -294,6 +294,87 @@ def testStreamingSolveStop : IO Unit := do
   assert (resp.status == .optimal || resp.status == .feasible)
     "streamingSolveStop: expected a feasible or optimal response after stopping early"
 
+/-- `maximize 3x + 2y` subject to `x + y ≤ 4` over `x ∈ [0, 2]`, `y ∈ [0, 10]`,
+plus `y ≤ 1` enforced by `b`: a unique optimum at `b` false, `x = 2`, `y = 2`,
+objective 10. `hint` runs last, so each caller offers a different starting point
+(or none at all) for one and the same model. -/
+def hintedModel (hint : IntVar → IntVar → BoolVar → CpModelM Unit) :
+    CpModelM (IntVar × IntVar × BoolVar) := do
+  let x ← newIntVar (.ofInterval 0 2) "x"
+  let y ← newIntVar (.ofInterval 0 10) "y"
+  let b ← newBoolVar "b"
+  let _ ← addLessOrEqual (x + y) (.const 4)
+  let capped ← addLessOrEqual y (.const 1)
+  capped.onlyEnforceIf #[b]
+  maximize ((3 : Int64) * x + (2 : Int64) * y)
+  hint x y b
+  pure (x, y, b)
+
+/-- A hint is advice, never a constraint, so no hint may change the answer:
+naming the optimum, naming a feasible non-optimal point, and naming values no
+solution has (indeed that no variable's domain even contains) must all leave the
+same unique optimum reached. -/
+def testSolutionHint : IO Unit := do
+  let expectOptimum (label : String) (hint : IntVar → IntVar → BoolVar → CpModelM Unit) : IO Unit := do
+    let ((x, y, b), resp) ← solve (m := hintedModel hint)
+    assertEq resp.status .optimal s!"solutionHint: expected optimal ({label})"
+    assertEq resp.objectiveValue (10.0 : Float) s!"solutionHint: expected objective 10 ({label})"
+    assertEq (resp.value x) (2 : Int64) s!"solutionHint: expected x = 2 ({label})"
+    assertEq (resp.value y) (2 : Int64) s!"solutionHint: expected y = 2 ({label})"
+    assertEq (resp.solution.getD b.literal.toNat 0) (0 : Int64)
+      s!"solutionHint: expected b false ({label})"
+
+  expectOptimum "unhinted" fun _ _ _ => pure ()
+
+  expectOptimum "the optimum" fun x y b => do
+    addSolutionHint #[(x, 2), (y, 2)]
+    addBoolSolutionHint #[(b, false)]
+
+  -- `b.not` false is `b` true, so this also exercises `BoolVar.hint`'s
+  -- negated-literal case against the solver rather than only in the abstract.
+  expectOptimum "a feasible non-optimal point" fun x y b => do
+    addSolutionHint #[(x, 2), (y, 1)]
+    addBoolSolutionHint #[(b.not, false)]
+
+  expectOptimum "values outside every domain" fun x y b => do
+    addSolutionHint #[(x, 9), (y, -3)]
+    addBoolSolutionHint #[(b, true)]
+
+/-- CP-SAT's validator rejects a hint naming the same variable twice, which
+makes this the positive check that the hint actually arrives in
+`CpModelProto.solution_hint`: a field that went unwritten, or landed on a number
+CP-SAT doesn't read, would leave this model perfectly valid. -/
+def testDuplicateSolutionHint : IO Unit := do
+  let (_, resp) ← solve (m := hintedModel fun x _ _ => addSolutionHint #[(x, 0), (x, 1)])
+  assertEq resp.status .modelInvalid "duplicateSolutionHint: expected the model to be rejected"
+  assert ((resp.solutionInfo.splitOn "solution hint").length > 1)
+    s!"duplicateSolutionHint: expected solutionInfo to name the hint, got: {resp.solutionInfo}"
+
+/-- `solutionInfo` names the subsolver whose solution won, so a solve that
+actually finds one must fill it in. -/
+def testSolutionInfo : IO Unit := do
+  let ((), resp) ← solve (m := knapsack)
+  assertEq resp.status .optimal "solutionInfo: expected optimal"
+  assert (!resp.solutionInfo.isEmpty) "solutionInfo: expected the winning subsolver to be named"
+
+/-- Hinting `b` to `value` and hinting `b.not` to `!value` are the same
+instruction, so they must resolve to the same `(variable, value)` pair. -/
+theorem boolVarHintNot (b : BoolVar) (value : Bool) : b.hint value = b.not.hint (!value) := by
+  simp only [BoolVar.hint, BoolVar.not]
+  rcases Int.lt_or_le b.literal 0 with h | h
+  · rw [if_pos h, if_neg (show ¬ (-b.literal - 1 < 0) by omega)]
+    cases value <;> rfl
+  · rw [if_neg (show ¬ (b.literal < 0) by omega), if_pos (show -b.literal - 1 < 0 by omega),
+      show -(-b.literal - 1) - 1 = b.literal by omega]
+    cases value <;> rfl
+
+/-- Absent and present-but-empty are different messages on the wire, and only
+absent means "no hint offered", so a hintless model must not emit the field at
+all. Invisible in the Lean value, hence worth pinning here. -/
+theorem hintlessModelEmitsNoHint (s : ModelState) (h : s.solutionHint.isEmpty) :
+    (Proto.modelStateToProto s).solution_hint = none := by
+  simp [Proto.modelStateToProto, h]
+
 /-- `Test/downstream-consumer` is a package that only `require`s cpsat (from
 this checkout, via a local path) and builds a normal `lean_exe`, mirroring the
 README's "Using cpsat as a dependency" snippet exactly. Lake does not
@@ -328,6 +409,9 @@ def main : IO Unit := do
   testAbsEquality
   testInfeasible
   testAssumptions
+  testSolutionHint
+  testDuplicateSolutionHint
+  testSolutionInfo
   testStreamingSolve
   testStreamingSolveStop
   testDownstreamConsumer

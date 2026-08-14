@@ -102,11 +102,17 @@ message CpObjectiveProto {
   double scaling_factor = 3;
 }
 
+message PartialVariableAssignmentProto {
+  repeated int32 vars = 1 [packed = true];
+  repeated int64 values = 2 [packed = true];
+}
+
 message CpModelProto {
   string name = 1;
   repeated IntegerVariableProto variables = 2;
   repeated ConstraintProto constraints = 3;
   CpObjectiveProto objective = 4;
+  PartialVariableAssignmentProto solution_hint = 6;
   repeated int32 assumptions = 7 [packed = true];
 }
 
@@ -124,6 +130,7 @@ message CpSolverResponseProto {
   double objective_value = 3;
   double best_objective_bound = 4;
   double wall_time = 15;
+  string solution_info = 20;
   repeated int32 sufficient_assumptions_for_infeasibility = 23 [packed = true];
 }
 
@@ -217,6 +224,14 @@ def modelStateToProto (s : ModelState) : CpModelProto :=
       (s.varDomains.zip s.varNames).map fun (d, n) => { name := n, domain := domainToFlatArray d }
     constraints := s.constraints.map constraintDataToProto
     objective := s.objective.map fun (expr, maximize) => objectiveToProto expr maximize
+    -- A present-but-empty `PartialVariableAssignment` is not the same thing as
+    -- an absent one, so a hintless model must omit the field entirely.
+    solution_hint :=
+      if s.solutionHint.isEmpty then none
+      else some {
+        vars := s.solutionHint.map (varRef ·.1)
+        values := s.solutionHint.map (·.2)
+      }
     assumptions := s.assumptions.map litRef
   }
 
@@ -243,6 +258,7 @@ def responseFromProto (r : CpSolverResponseProto) : CpSolverResponse :=
     bestObjectiveBound := r.best_objective_bound
     solution := r.solution
     wallTime := r.wall_time
+    solutionInfo := r.solution_info
     sufficientAssumptionsForInfeasibility :=
       r.sufficient_assumptions_for_infeasibility.map fun lit => ⟨lit.toInt⟩
   }

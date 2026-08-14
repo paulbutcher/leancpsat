@@ -32,6 +32,10 @@ structure CpSolverResponse where
   /-- Indexed by `IntVar.index`. -/
   solution : Array Int64
   wallTime : Float
+  /-- CP-SAT's own description of how the solution was found, naming the
+  subsolver responsible; also carries the diagnostic when `status ==
+  .modelInvalid`. -/
+  solutionInfo : String
   /-- A subset of the model's `markAssumption`ed literals that's jointly
   sufficient to prove infeasibility. Only populated when `status ==
   .infeasible`; not guaranteed minimal. -/

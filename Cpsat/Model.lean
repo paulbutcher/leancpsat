@@ -42,6 +42,12 @@ namespace BoolVar
 def ofIntVar (v : IntVar) : BoolVar := ⟨(v.index : Int)⟩
 def not (b : BoolVar) : BoolVar := ⟨-b.literal - 1⟩
 
+/-- The `(variable, value)` pair that sets `b` to `value`, resolving a negated
+literal to its underlying variable with the value flipped. -/
+def hint (b : BoolVar) (value : Bool) : IntVar × Int64 :=
+  if b.literal < 0 then (⟨(-b.literal - 1).toNat⟩, if value then 0 else 1)
+  else (⟨b.literal.toNat⟩, if value then 1 else 0)
+
 end BoolVar
 
 /-- An affine combination of integer variables plus a constant. -/
@@ -122,6 +128,8 @@ structure ModelState where
   objective : Option (LinearExpr × Bool) := none
   /-- Literals tracked for infeasibility explanation; see `markAssumption`. -/
   assumptions : Array BoolVar := #[]
+  /-- A partial assignment offered to the search as advice; see `addSolutionHint`. -/
+  solutionHint : Array (IntVar × Int64) := #[]
 deriving Inhabited
 
 /-- Model-building is a plain state computation; no FFI is involved until
@@ -255,5 +263,21 @@ def markAssumption (b : BoolVar) : CpModelM Unit :=
 
 def markAssumptions (bs : Array BoolVar) : CpModelM Unit :=
   modify fun s => { s with assumptions := s.assumptions ++ bs }
+
+/-- Offers `hints` to the search as a starting point, e.g. a solution to an
+earlier, slightly different model. It is advice, not a constraint: hinting some
+variables and not others is normal, and a hint that's infeasible or outside a
+variable's domain leaves the model's feasible solutions and its optimum exactly
+as they were.
+
+Naming the same variable twice, whether within one call or across several, is
+the one way to get this wrong: CP-SAT treats a duplicate as a caller error and
+rejects the whole model as invalid. -/
+def addSolutionHint (hints : Array (IntVar × Int64)) : CpModelM Unit :=
+  modify fun s => { s with solutionHint := s.solutionHint ++ hints }
+
+/-- `addSolutionHint` over Boolean literals; see `BoolVar.hint`. -/
+def addBoolSolutionHint (hints : Array (BoolVar × Bool)) : CpModelM Unit :=
+  addSolutionHint (hints.map fun (b, value) => b.hint value)
 
 end Cpsat
