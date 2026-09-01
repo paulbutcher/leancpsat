@@ -204,10 +204,10 @@ package cpsat where
     else #[]
 
 -- Pinned to a commit, not a tag: upstream has no tagged releases as of this
--- writing. Validated against this project's lean-toolchain (v4.32.2) despite
+-- writing. Validated against this project's lean-toolchain (v4.33.1) despite
 -- protobuf's own lean-toolchain being v4.32.0.
 require protobuf from git
-  "https://github.com/Lean-zh/protobuf.git" @ "b6af3753a1e9f12269039e1322bf3020175d7577"
+  "https://github.com/Lean-zh/protobuf.git" @ "defa14ff387d6994b2e1bb7fee9bbd79b47fc37d"
 
 @[default_target]
 lean_lib Cpsat

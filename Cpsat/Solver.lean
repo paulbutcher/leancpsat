@@ -1,12 +1,17 @@
 -- Copyright (c) 2026 Paul Butcher. All rights reserved.
 -- Released under Apache 2.0 license as described in the file LICENSE.
-import Cpsat.Proto
+
+module
+
+public import Cpsat.Proto
 
 /-!
 The FFI boundary: serialize a finished model to `CpModelProto`/`SatParameters`
 bytes, hand them to `native/cpsat_shim.cpp`, decode the `CpSolverResponse`
 bytes that come back. Everything above this file is plain, ordinary Lean.
 -/
+
+public section
 
 namespace Cpsat
 

@@ -1,6 +1,12 @@
 -- Copyright (c) 2026 Paul Butcher. All rights reserved.
 -- Released under Apache 2.0 license as described in the file LICENSE.
+
+module
+
 import Cpsat
+-- The theorems below unfold definitions whose bodies the public interface does not expose.
+import all Cpsat.Model
+import all Cpsat.Proto
 
 /-!
 End-to-end tests through `Cpsat.solve`: these are the real proof that the FFI
@@ -360,7 +366,8 @@ def testSolutionInfo : IO Unit := do
 /-- Hinting `b` to `value` and hinting `b.not` to `!value` are the same
 instruction, so they must resolve to the same `(variable, value)` pair. -/
 theorem boolVarHintNot (b : BoolVar) (value : Bool) : b.hint value = b.not.hint (!value) := by
-  simp only [BoolVar.hint, BoolVar.not]
+  unfold BoolVar.hint BoolVar.not
+  dsimp only
   rcases Int.lt_or_le b.literal 0 with h | h
   · rw [if_pos h, if_neg (show ¬ (-b.literal - 1 < 0) by omega)]
     cases value <;> rfl
@@ -393,7 +400,7 @@ def testDownstreamConsumer : IO Unit := do
   assertEq run.stdout.trimAscii.copy "rabbits = 8, pheasants = 12"
     "downstream-consumer: unexpected output"
 
-def main : IO Unit := do
+public def main : IO Unit := do
   testRabbitsAndPheasants
   testObjective
   testMaximize

@@ -1,12 +1,17 @@
 -- Copyright (c) 2026 Paul Butcher. All rights reserved.
 -- Released under Apache 2.0 license as described in the file LICENSE.
-import Cpsat.Model
+
+module
+
+public import Cpsat.Model
 
 /-!
 Solver-facing plain data types: parameters going in, response coming out.
 Independent of `Cpsat.Proto` (the wire encoding) and `Cpsat.Solver` (the FFI
 boundary), so both can depend on this without a cycle.
 -/
+
+public section
 
 namespace Cpsat
 

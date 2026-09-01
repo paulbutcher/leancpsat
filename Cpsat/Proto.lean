@@ -1,8 +1,11 @@
 -- Copyright (c) 2026 Paul Butcher. All rights reserved.
 -- Released under Apache 2.0 license as described in the file LICENSE.
-import Protobuf
-import Cpsat.Model
-import Cpsat.Basic
+
+module
+
+public import Protobuf
+public import Cpsat.Model
+public import Cpsat.Basic
 
 /-!
 Wire format layer: message shapes declared by hand against
@@ -19,6 +22,8 @@ later never requires touching already-declared fields.
 -/
 
 open scoped Protobuf.Notation
+
+public section
 
 namespace Cpsat.Proto
 
