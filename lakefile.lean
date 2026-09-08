@@ -167,7 +167,7 @@ def systemLibGccDir : FilePath :=
     | none => throw <| IO.userError s!"libgcc.a path {path} has no parent directory"
 
 package cpsat where
-  version := v!"0.3.0"
+  version := v!"0.3.1"
   -- Weak: these embed a local, machine-specific path, so they must not affect
   -- build artifact hashes (see Lake's `buildO` docs).
   weakLeancArgs := #["-I", orToolsInclude.toString]
@@ -203,11 +203,10 @@ package cpsat where
       ]
     else #[]
 
--- Pinned to a commit, not a tag: upstream has no tagged releases as of this
--- writing. Validated against this project's lean-toolchain (v4.33.1) despite
+-- Validated against this project's lean-toolchain (v4.33.1) despite
 -- protobuf's own lean-toolchain being v4.32.0.
 require protobuf from git
-  "https://github.com/Lean-zh/protobuf.git" @ "defa14ff387d6994b2e1bb7fee9bbd79b47fc37d"
+  "https://github.com/Lean-zh/protobuf.git" @ "v0.4.0"
 
 @[default_target]
 lean_lib Cpsat
