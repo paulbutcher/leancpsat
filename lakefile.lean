@@ -167,7 +167,7 @@ def systemLibGccDir : FilePath :=
     | none => throw <| IO.userError s!"libgcc.a path {path} has no parent directory"
 
 package cpsat where
-  version := v!"0.3.1"
+  version := v!"0.4.0"
   -- Weak: these embed a local, machine-specific path, so they must not affect
   -- build artifact hashes (see Lake's `buildO` docs).
   weakLeancArgs := #["-I", orToolsInclude.toString]

@@ -243,20 +243,25 @@ def testAssumptions : IO Unit := do
 /-- A 0/1 knapsack (maximize total value of selected items subject to a weight capacity), sized
 and varied enough that CP-SAT, restricted to a single worker for a deterministic sequence of
 incumbents, finds more than one feasible solution en route to the optimum. -/
-def knapsack : CpModelM Unit := do
+def knapsackValue (i : Nat) : Int64 := Int64.ofNat (((i * 5) % 13) + 1)
+
+def knapsackItems : CpModelM (Array IntVar) := do
   let n := 30
   let items ← (List.range n).toArray.mapM fun _ => newIntVar (.ofInterval 0 1)
   let weight (i : Nat) : Int64 := Int64.ofNat ((i % 7) + 3)
-  let value (i : Nat) : Int64 := Int64.ofNat (((i * 5) % 13) + 1)
   let mut weightExpr := LinearExpr.const 0
   let mut valueExpr := LinearExpr.const 0
   let mut capacity : Int64 := 0
   for i in [0:n] do
     weightExpr := weightExpr + weight i * items[i]!
-    valueExpr := valueExpr + value i * items[i]!
+    valueExpr := valueExpr + knapsackValue i * items[i]!
     capacity := capacity + weight i
   let _ ← addLessOrEqual weightExpr (.const (capacity * 6 / 10))
   maximize valueExpr
+  pure items
+
+def knapsack : CpModelM Unit := do
+  let _ ← knapsackItems
 
 /-- Streaming solve of `knapsack`: every `onSolution` callback should fire before the final
 response, in increasing objective order (CP-SAT only calls it on improving solutions), and the
@@ -299,6 +304,39 @@ def testStreamingSolveStop : IO Unit := do
     "streamingSolveStop: expected StopToken.stop to make the call return promptly"
   assert (resp.status == .optimal || resp.status == .feasible)
     "streamingSolveStop: expected a feasible or optimal response after stopping early"
+
+/-- Every `onSolution` call should receive the result the call returns, and that result should
+be enough to read the solution: the objective recomputed from the returned items' values must
+match the one CP-SAT reports. -/
+def testStreamingSolveResult : IO Unit := do
+  let params : SolverParameters := { numWorkers := some 1 }
+  let seenRef ← IO.mkRef (#[] : Array (Array IntVar))
+  let (items, resp) ← solveWithResultCallback params (← StopToken.new)
+    (fun items resp => do
+      seenRef.modify (·.push items)
+      let total := items.zipIdx.foldl
+        (fun acc (v, i) => acc + knapsackValue i * resp.value v) (0 : Int64)
+      assertEq total.toFloat resp.objectiveValue
+        "streamingSolveResult: objective recomputed from the result should match the response")
+    knapsackItems
+  assertEq resp.status .optimal "streamingSolveResult: expected optimal"
+  let seen ← seenRef.get
+  assert (seen.size ≥ 1) "streamingSolveResult: expected at least one onSolution callback"
+  assert (seen.all (· == items))
+    "streamingSolveResult: every callback should receive the result the call returns"
+
+/-- An infeasible model has no solutions to deliver, but the call still returns its result. -/
+def testStreamingSolveResultInfeasible : IO Unit := do
+  let calledRef ← IO.mkRef false
+  let (x, resp) ← solveWithResultCallback {} (← StopToken.new)
+    (fun _ _ => calledRef.set true) (do
+      let x ← newIntVar (.ofInterval 0 10) "x"
+      let _ ← addLessOrEqual x (.const 1)
+      let _ ← addGreaterOrEqual x (.const 5)
+      pure x)
+  assertEq resp.status .infeasible "streamingSolveResultInfeasible: expected infeasible"
+  assert (!(← calledRef.get)) "streamingSolveResultInfeasible: expected no onSolution callback"
+  assertEq x.index 0 "streamingSolveResultInfeasible: expected the model's variable back"
 
 /-- `maximize 3x + 2y` subject to `x + y ≤ 4` over `x ∈ [0, 2]`, `y ∈ [0, 10]`,
 plus `y ≤ 1` enforced by `b`: a unique optimum at `b` false, `x = 2`, `y = 2`,
@@ -421,5 +459,7 @@ public def main : IO Unit := do
   testSolutionInfo
   testStreamingSolve
   testStreamingSolveStop
+  testStreamingSolveResult
+  testStreamingSolveResultInfeasible
   testDownstreamConsumer
   IO.println "All tests passed."

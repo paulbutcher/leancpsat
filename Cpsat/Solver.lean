@@ -104,14 +104,23 @@ whichever thread is actually pulling from it, i.e. this one.
 `token` cancels a streaming solve exactly as it does `solveInterruptible`: a caller that only wants
 the first solution can call `StopToken.stop` from within `onSolution` (or from another task) once
 it has what it needs, and the underlying search winds down promptly, with this returning shortly
-after with whatever was found so far as the final response. -/
-def solveWithSolutionCallback (params : SolverParameters) (token : StopToken)
-    (onSolution : CpSolverResponse → IO Unit) (m : CpModelM α) : IO (α × CpSolverResponse) := do
+after with whatever was found so far as the final response.
+
+`onSolution` also receives `m`'s result: a response is indexed by variable index, so only the
+variables `m` returned make it readable beyond its objective value. -/
+def solveWithResultCallback (params : SolverParameters) (token : StopToken)
+    (onSolution : α → CpSolverResponse → IO Unit) (m : CpModelM α) :
+    IO (α × CpSolverResponse) := do
   let (result, state) := m.run {}
   let modelBytes ← encodeOrPanic "CpModelProto" (Proto.modelStateToProto state)
   let paramsBytes ← encodeOrPanic "SatParameters" (Proto.parametersToProto params)
   let handle ← cpsatSolveStreamStart token modelBytes paramsBytes
-  let final ← pullUpdates handle onSolution
+  let final ← pullUpdates handle (onSolution result)
   return (result, final)
+
+/-- Like `solveWithResultCallback`, for a caller whose `onSolution` has no use for `m`'s result. -/
+def solveWithSolutionCallback (params : SolverParameters) (token : StopToken)
+    (onSolution : CpSolverResponse → IO Unit) (m : CpModelM α) : IO (α × CpSolverResponse) :=
+  solveWithResultCallback params token (fun _ => onSolution) m
 
 end Cpsat
