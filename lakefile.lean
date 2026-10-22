@@ -203,7 +203,7 @@ package cpsat where
       ]
     else #[]
 
--- Validated against this project's lean-toolchain (v4.33.1) despite
+-- Validated against this project's lean-toolchain (v4.35.0) despite
 -- protobuf's own lean-toolchain being v4.32.0.
 require protobuf from git
   "https://github.com/Lean-zh/protobuf.git" @ "v0.4.0"
